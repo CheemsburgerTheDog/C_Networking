@@ -3,7 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-
+#include <fcntl.h>
 FILE *file;
 // 7070 UDP 1024 name.mp4
 int main (int argc, char* argv[]) {
@@ -22,6 +22,29 @@ int main (int argc, char* argv[]) {
     memset(&udp_caddr, 0, sizeof(udp_caddr));
     memset(&tcp_caddr, 0, sizeof(tcp_caddr));
    
+    udp_saddr.sin_family = AF_INET;
+    udp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    udp_saddr.sin_port = htons(atoi(argv[1]));
+    udp_handle = socket(AF_INET, SOCK_DGRAM, 0);
+    bind (udp_handle, (struct sockaddr *) &udp_saddr, sizeof(udp_saddr));
+    setsockopt(udp_handle, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+    listen(udp_handle, 2);
+
+    tcp_saddr.sin_family = AF_INET;
+    tcp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    tcp_saddr.sin_port = htons(atoi(argv[1]));
+    tcp_handle = socket(AF_INET, SOCK_STREAM, 0);
+    bind (tcp_handle, (struct sockaddr *) & tcp_saddr, sizeof(tcp_saddr));
+    int status = fcntl(socketfd, F_SETFL, fcntl(socketfd, F_GETFL, 0) | O_NONBLOCK);
+    setsockopt(tcp_handle, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+    listen(tcp_handle, 2);
+    
+    chandle = accept(handle, (struct sockaddr *) &caddr, &addr_size);
+    sleep(1);
+
+
+
+
     int handle, chandle;
     char *buffer = (char*) malloc(buff_size*sizeof(char));
     int counter = 0, n = 0; 
