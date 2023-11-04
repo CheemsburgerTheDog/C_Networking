@@ -6,25 +6,46 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
-// "127.0.0.1 7777 1024 to_send.mp4 receivec.mp4"
+// "127.0.0.1 7777 UDP 1024 to_send.mp4 receivec.mp4"
 int main (int argc, char* argv[]) {
-    int buff_size = atoi(argv[3]), handle, n = 0, counter = 0;
+    int buff_size = atoi(argv[4]);
+    int handle;
     char *buffer = (char*) malloc(buff_size*sizeof(char));
     struct sockaddr_in saddr;
+    int mode = 0;
+    
     memset(&saddr, 0, sizeof (saddr));
     saddr.sin_family = AF_INET;
     inet_pton(AF_INET, argv[1], &(saddr.sin_addr));
     saddr.sin_port = htons (atoi(argv[2]));
     socklen_t slen= sizeof(saddr);
-    handle = socket (AF_INET, SOCK_DGRAM, 0);
-    sendto(handle, argv[5], sizeof(argv[6])+10, 0, (struct sockaddr *) &saddr, slen);
+
+    if (strncmp(argv[3], "UDP", 3) == 0){
+        mode = 0;
+        handle = socket (AF_INET, SOCK_DGRAM, 0);
+        sendto(handle, argv[6], sizeof(argv[6])+10, 0, (struct sockaddr *) &saddr, slen);
+    } else if (strncmp(argv[3], "TCP", 3) == 0){
+        mode = 1;
+        handle = socket(AF_INET, SOCK_STREAM, 0);
+        connect(handle, (struct sockaddr*) &saddr, sizeof(saddr));
+        bzero(buffer, buff_size*sizeof(char));
+        strcpy(buffer, argv[6]);
+        send(handle, buffer, buff_size, 0);
+    } else{ exit(1); }
+
     FILE *file;
-    file = fopen(argv[4],"rb");
+    file = fopen(argv[5],"rb");
+    int n = 0;
+    int counter = 0;
+
     while ( ( n = fread(buffer, 1, buff_size, file) ) > 0 ) {
-        sendto(handle, buffer, n, 0, (struct sockaddr *) &saddr, slen);
+        if (mode == 0) { sendto(handle, buffer, n, 0, (struct sockaddr *) &saddr, slen); }
+        if (mode == 1) { send(handle, buffer, n, 0); }
         counter ++;
     }
+    // sendto(handle, buffer, 0, 0, (struct sockaddr *) &saddr, slen);
     printf("Wyslano %d pakietow o wielkosci %d\n",counter, buff_size);
+    close(handle);
     fclose(file);
     return 0;
 }
