@@ -7,15 +7,24 @@
 FILE *file;
 // 7070 UDP 1024 name.mp4
 int main (int argc, char* argv[]) {
-    int mode = 0;
-    struct sockaddr_in saadr, caddr;
+
+    struct sockaddr_in udp_saddr, tcp_saddr;
+    struct sockaddr_in udp_caddr, tcp_caddr;
+
+    int udp_handle, tcp_handle, tcp_chandle;
+
+    int size = 10000*1024;
     int buff_size = atoi(argv[3]);
+    char *buffer = (char*) malloc(buff_size*sizeof(char));
+
+    memset(&udp_saddr, 0, sizeof(udp_saddr));
+    memset(&tcp_saddr, 0, sizeof(tcp_saddr));
+    memset(&udp_caddr, 0, sizeof(udp_caddr));
+    memset(&tcp_caddr, 0, sizeof(tcp_caddr));
+   
     int handle, chandle;
     char *buffer = (char*) malloc(buff_size*sizeof(char));
-    int size = 10000*1024;
-    int counter = 0, n = 0;
-    memset(&saadr, 0, sizeof(saadr));
-    memset(&caddr, 0, sizeof(caddr));
+    int counter = 0, n = 0; 
     saadr.sin_family = AF_INET;
     saadr.sin_addr.s_addr = htonl(INADDR_ANY);
     saadr.sin_port = htons(atoi(argv[1]));
