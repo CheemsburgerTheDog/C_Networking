@@ -6,14 +6,20 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
-// "127.0.0.1 7777 UDP 1024 to_send.mp4 receivec.mp4"
+struct dzialanie {
+    int a;
+    int b;
+};
+// "127.0.0.1 7777 UDP 1024 1 2"
 int main (int argc, char* argv[]) {
     int buff_size = atoi(argv[4]);
     int handle;
     char *buffer = (char*) malloc(buff_size*sizeof(char));
     struct sockaddr_in saddr;
     int mode = 0;
-    
+    struct dzialanie to_send;
+    to_send.a = atoi(argv[5]);
+    to_send.b = atoi(argv[5]);
     memset(&saddr, 0, sizeof (saddr));
     saddr.sin_family = AF_INET;
     inet_pton(AF_INET, argv[1], &(saddr.sin_addr));
