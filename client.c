@@ -18,6 +18,7 @@ int main (int argc, char* argv[]) {
     char *buffer = (char*) malloc(buff_size*sizeof(char));
     struct sockaddr_in saddr;
     int mode = 0;
+    int wynik = 0;
     struct dzialanie to_send;
     to_send.a = 2;
     to_send.b = 3;
@@ -40,7 +41,12 @@ int main (int argc, char* argv[]) {
         // if (mode == 0) { sendto(handle, buffer, n, 0, (struct sockaddr *) &saddr, slen); }
         // if (mode == 1) { send(handle, buffer, n, 0); }
     if (mode == 0) { sendto(handle, &to_send, sizeof(struct dzialanie), 0, (struct sockaddr *) &saddr, slen);}
-    if (mode == 1) { send(handle, &to_send, sizeof(struct dzialanie), 0); }
+    if (mode == 1) { 
+        send(handle, &to_send, sizeof(struct dzialanie), 0);
+        recv(handle, &wynik, sizeof(int), 0);
+        printf("WYnik: %d", wynik);
+        fflush(stdout); 
+    }
     //     counter ++;
     // }
     // sendto(handle, buffer, 0, 0, (struct sockaddr *) &saddr, slen);

@@ -20,11 +20,7 @@ int main (int argc, char* argv[]) {
     struct sockaddr_in udp_saddr, tcp_saddr;
     struct sockaddr_in udp_caddr, tcp_caddr;
     socklen_t udp_clen, tcp_clen;
-
     int udp_handle, tcp_sandle, tcp_chandle = 0, result = 0, retval = 0;
-
-    int buff_size = atoi(argv[3]);
-    char *buffer = (char*) malloc(buff_size*sizeof(char));
 
     memset(&udp_saddr, 0, sizeof(udp_saddr));
     memset(&tcp_saddr, 0, sizeof(tcp_saddr));
