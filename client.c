@@ -10,28 +10,24 @@ struct dzialanie {
     int a;
     int b;
 };
-// "
+// "127.0.0.1 7777 UDP A B"
 int main (int argc, char* argv[]) {
-    char *test = "TCP";
-    int buff_size = 100;
-    int handle;
-    char *buffer = (char*) malloc(buff_size*sizeof(char));
+    int handle, mode = 0, wynik = 0;
     struct sockaddr_in saddr;
-    int mode = 0;
-    int wynik = 0;
     struct dzialanie to_send;
-    to_send.a = 2;
-    to_send.b = 3;
+    to_send.a = atoi(argv[4]);
+    to_send.b = atoi(argv[5]);
+
     memset(&saddr, 0, sizeof (saddr));
     saddr.sin_family = AF_INET;
-    inet_pton(AF_INET, "127.0.0.1", &(saddr.sin_addr));
-    saddr.sin_port = htons (7777);
+    inet_pton(AF_INET, argv[1], &(saddr.sin_addr));
+    saddr.sin_port = htons (atoi(argv[2]));
     socklen_t slen= sizeof(saddr);
 
-    if (strncmp(test, "UDP", 3) == 0){
+    if (strncmp(argv[3], "UDP", 3) == 0){
         mode = 0;
         handle = socket (AF_INET, SOCK_DGRAM, 0);
-    } else if (strncmp(test, "TCP", 3) == 0){
+    } else if (strncmp(argv[3], "TCP", 3) == 0){
         mode = 1;
         handle = socket(AF_INET, SOCK_STREAM, 0);
         connect(handle, (struct sockaddr*) &saddr, sizeof(saddr));

@@ -13,7 +13,7 @@ struct dzialanie {
     int a;
     int b;
 };
-
+// 7777
 int main (int argc, char* argv[]) {
     struct pollfd fds[2];
     struct dzialanie received;
@@ -29,7 +29,7 @@ int main (int argc, char* argv[]) {
 
     udp_saddr.sin_family = AF_INET;
     udp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    udp_saddr.sin_port = htons(7777);
+    udp_saddr.sin_port = htons(atoi(argv[1]));
     udp_clen = sizeof(udp_caddr);
     udp_handle = socket(AF_INET, SOCK_DGRAM, 0);
     bind (udp_handle, (struct sockaddr *) & udp_saddr, sizeof(udp_saddr));
@@ -37,7 +37,7 @@ int main (int argc, char* argv[]) {
 
     tcp_saddr.sin_family = AF_INET;
     tcp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    tcp_saddr.sin_port = htons(7777);
+    tcp_saddr.sin_port = htons(atoi(argv[1]));
     tcp_clen = sizeof(tcp_caddr);
     tcp_sandle = socket(AF_INET, SOCK_STREAM, 0);
     fcntl(tcp_sandle, F_SETFL, fcntl(tcp_sandle, F_GETFL, 0) | O_NONBLOCK);
@@ -64,16 +64,13 @@ int main (int argc, char* argv[]) {
             if (fds[1].revents & POLLIN) {
                 recv(tcp_chandle, &received, sizeof(struct dzialanie) , 0 ); 
                 result = received.a+received.b;
-                printf("%d", result);
                 send(tcp_chandle, &result, sizeof(int), 0);
                 close(tcp_chandle);
             }
         }
-        
         if (fds[0].revents & POLLIN) {
             recvfrom(udp_handle, &received, sizeof(struct dzialanie), 0, (struct sockaddr *)&udp_caddr, &udp_clen);
             result = received.a + received.b;
-            printf("%d", result);
             sendto(udp_handle, &result, sizeof(int), 0 , (struct sockaddr *) &udp_caddr, udp_clen);
         }
         fflush(stdout);
