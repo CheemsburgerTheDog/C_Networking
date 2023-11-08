@@ -30,6 +30,7 @@ typedef struct {
 } message;
 
 int user_mode = 0;
+int handle;
 struct pollfd file_desc[2];
 offer offer_list[LISTSIZE];
 
@@ -63,14 +64,13 @@ void update_offers() {
         sleep(2);
     }
 }
-void client_mode(int handle) {
+void client_mode() {
     file_desc[0].fd = 0;    //STDIN
     file_desc[0].events = POLLIN;
     file_desc[1].fd = handle; // Socket
     file_desc[1].events = POLLIN;
     while ( true ) {
-        int descriptor = poll(file_desc, 2, -1);
-        if (descriptor == -1 ){ exit(1); }
+        if ( -1 == poll(file_desc, 2, 0) ){ exit(1); }
         for ( int i = 0; i < 2; i++ ) {
             if ( file_desc[i].revents & POLLIN ) {
                 if (i == 0) { // Input STDIN
@@ -172,7 +172,7 @@ int login(int handle) {
 }   }
 
 int main() {
-    int sock, conn_handle; //Establish connection
+    int sock; //Establish connection
     struct sockaddr_in servaddr;
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1) {
@@ -194,7 +194,7 @@ int main() {
     scanf("%d", &option); //Login to the server
     switch (option) {
         case 2:
-            login(conn_handle);
+            login();
             break;
         case 1:
             reg();
