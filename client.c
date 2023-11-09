@@ -172,7 +172,29 @@ int login(int handle) {
 }   }
 
 int main() {
-    int sock, conn_handle; //Establish connection
+    /* Login to the server with the credentials via UDP.
+        1. Pass credentials
+        2. Receive STATUS ( client / supplier ) and SESSION_ID
+        3, Periodically send USER_REMIND packet with SESSION_ID to prolong session and update IP
+        CLIENT: 
+            Await till user publishes offer
+            Send packet PUB_OFFER with details
+            Await PUB_CONFIRM with timeout
+                (server error) Upon timeout resend PUB_OFFER
+                (server error) Upon PUB_ERROR resend PUB_OFFER
+                (connection reestablished) Upon USER_BUSY proceed to the offer handling
+            Run clock with T timeout(? potem) / await OFFER_ACCEPTED
+                (T timeout )Upon T timeout back to the beggining
+            Upon OFFER_ACCEPTED accepted establish TCP connection
+                (establish failure) idk retry?
+            Block all fucntionality
+
+
+            
+
+            
+    */
+    int sock, conn_handle;
     struct sockaddr_in servaddr;
     sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock == -1) {
