@@ -5,6 +5,6 @@
 #define CAP 10
 
 int main() {
-    InitServer("127.0.0.1", 8000, TCP_C_SIZE, 8001, UDP_C_SIZE, CAP);
+    InitServer("127.0.0.1", 7030, TCP_C_SIZE, 7031, UDP_C_SIZE, CAP);
     Start();
 }

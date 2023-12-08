@@ -20,6 +20,7 @@ int g_current_capacity = 0;
 
 //Initialize all static values. Prepare the sockets and start listening on them. 
 int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
+    int temp;
     s_udp = (Server*) malloc(sizeof(Server));
     s_tcp = (Server*) malloc(sizeof(Server));
     g_total_capacity = capacity;
@@ -34,35 +35,19 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
     s_udp->addr.sin_family = AF_INET;
     s_udp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
     s_udp->addr.sin_port = htons(uport);
-    if ( s_udp->handle = socket(AF_INET, SOCK_DGRAM, 0) == -1 ) { 
-        log_info(ERROR, "UDP socket creation failure"); 
-        exit(EXIT_FAILURE);
-    }
-    if ( bind (s_udp->handle, (struct sockaddr *) &(s_udp->addr), sizeof(s_udp->addr)) == -1 ) { 
-        log_info(ERROR, "UDP socket binding failure"); 
-        exit(EXIT_FAILURE);
-    }
-    if ( listen(s_udp->handle, un) == -1 ) { 
-        log_info(ERROR, "UDP socket listening failure"); 
-        exit(EXIT_FAILURE);
-    }
+    temp = socket(AF_INET, SOCK_DGRAM, 0);
+    s_udp->handle = temp;
+    bind (s_udp->handle, (struct sockaddr *) &(s_udp->addr), sizeof(s_udp->addr));
+    listen(s_udp->handle, un);
 
     s_tcp->addr.sin_family = AF_INET;
     s_tcp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
     s_tcp->addr.sin_port = htons(tport);
-    if ( s_tcp->handle = socket(AF_INET, SOCK_STREAM, 0) == -1 ) { 
-        log_info(ERROR, "TCP socket creation failure");
-        exit(EXIT_FAILURE);
-    }
-    // if ( fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK) == -1 ) { log_info(ERROR, "TCP socket fnctl failure"); }
-    if ( bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr)) == -1 ) { 
-        log_info(ERROR, "TCP socket binding failure"); 
-        exit(EXIT_FAILURE);
-    }
-    if ( listen(s_tcp->handle, tn) == -1 ) { 
-        log_info(ERROR, "TCP socket listening failure");
-        exit(EXIT_FAILURE);
-    }
+    temp = socket(AF_INET, SOCK_STREAM, 0);
+    s_tcp->handle = temp;
+    // fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK) == -1 ) { log_info(ERROR, "TCP socket fnctl failure"); }
+    bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr));
+    listen(s_tcp->handle, tn);
 }
 //Begin accepting connections till total_capacity is reached. Needs to be run on a separete thread as it's only updating User array with new handles and active = true in-place. It does not recover any incoming data from the socket.
 void Start() {
