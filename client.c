@@ -7,8 +7,9 @@
 #include <arpa/inet.h>
 #include <strings.h>
 
-// "127.0.0.1 7777 UDP A B"
+// "127.0.0.1 7777 UDP"
 int main (int argc, char* argv[]) {
+    char received[6];
     int handle, mode = 0;
     struct sockaddr_in saddr;
 
@@ -30,11 +31,12 @@ int main (int argc, char* argv[]) {
     // while ( ( n = fread(buffer, 1, buff_size, file) ) > 0 ) {
         // if (mode == 0) { sendto(handle, buffer, n, 0, (struct sockaddr *) &saddr, slen); }
         // if (mode == 1) { send(handle, buffer, n, 0); }
-    if (mode == 0) { sendto(handle, &to_send, sizeof(struct dzialanie), 0, (struct sockaddr *) &saddr, slen);}
+    if (mode == 0) { recvfrom(handle, &received, 6, 0, (struct sockaddr *) &saddr, slen);}
     if (mode == 1) { 
-        send(handle, &to_send, sizeof(struct dzialanie), 0);
-        recv(handle, &wynik, sizeof(int), 0);
-        printf("WYnik: %d", wynik);
+        recv(handle, &received, 6, 0);
+        recv(handle, &received, 6, 0);
+        recv(handle, &received, 6, 0);
+        printf("WYnik: %s", received);
         fflush(stdout); 
     }
     //     counter ++;
