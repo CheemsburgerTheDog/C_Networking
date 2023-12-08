@@ -1,3 +1,5 @@
+#ifndef LOGGING
+#define LOGGING
 #include <syslog.h>
 #include <sys/socket.h>
 
@@ -6,7 +8,7 @@
 #define ERROR 2
 #define RESPOND 3
 
-void log(int type, const char* text) {
+void log_info(int type, const char* text) {
     switch (type) {
         case INFO:
             syslog(LOG_INFO, text);
@@ -23,3 +25,4 @@ void log(int type, const char* text) {
             break;
     }
 }
+#endif

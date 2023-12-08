@@ -1,10 +1,12 @@
+#ifndef AUTHENTICATION
+#define AUTHENTICATION
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #define _GNU_SOURCE
 #include <sys/socket.h>
-#include <logging.c>
+#include "logging.c"
 #define BUFF_SIZE 30
 #define CRED_SIZE 10
 #include<pthread.h>
@@ -75,3 +77,4 @@ int RegisterUser(int socket, Passwd passwd) {
     pthread_mutex_unlock(&(passwd.mutex));
     return 0;
 }
+#endif

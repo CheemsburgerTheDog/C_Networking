@@ -1,3 +1,5 @@
+#ifndef S_NETWORK
+#define S_NETWORK
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,13 +11,13 @@
 #define CAPACITY 10
 #define MSG_LEN 50
 
-typedef struct {
+typedef struct server {
     struct sockaddr_in addr;
     socklen_t len;
     int handle;
 } Server;
 
-typedef struct {
+typedef struct user {
     struct sockaddr_in addr;
     socklen_t len;
     int handle; //TCP ONLY
@@ -27,6 +29,7 @@ typedef struct {
     int timeout
 } User;
 
-typedef struct {
+typedef struct message {
     char message[MSG_LEN];
 } Message;
+#endif

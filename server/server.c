@@ -1,5 +1,5 @@
-#include <network.c>
-#include <s_network.c>
+#include "network.c"
+#include "s_network.c"
 #define TCP_C_SIZE 5
 #define UDP_C_SIZE 10
 #define CAP 10
