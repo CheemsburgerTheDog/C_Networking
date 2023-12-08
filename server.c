@@ -29,7 +29,7 @@ int main (int argc, char* argv[]) {
 
     udp_saddr.sin_family = AF_INET;
     udp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    udp_saddr.sin_port = htons(atoi(argv[1]));
+    udp_saddr.sin_port = htons(7778);
     udp_clen = sizeof(udp_caddr);
     udp_handle = socket(AF_INET, SOCK_DGRAM, 0);
     bind (udp_handle, (struct sockaddr *) & udp_saddr, sizeof(udp_saddr));
@@ -37,7 +37,7 @@ int main (int argc, char* argv[]) {
 
     tcp_saddr.sin_family = AF_INET;
     tcp_saddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    tcp_saddr.sin_port = htons(atoi(argv[1]));
+    tcp_saddr.sin_port = htons(7777);
     tcp_clen = sizeof(tcp_caddr);
     tcp_sandle = socket(AF_INET, SOCK_STREAM, 0);
     fcntl(tcp_sandle, F_SETFL, fcntl(tcp_sandle, F_GETFL, 0) | O_NONBLOCK);
