@@ -13,7 +13,6 @@
 
 typedef struct server {
     struct sockaddr_in addr;
-    socklen_t len;
     int handle;
 } Server;
 
@@ -26,7 +25,7 @@ typedef struct user {
     int published;
     bool active;
     bool busy;
-    int timeout
+    int timeout;
 } User;
 
 typedef struct message {

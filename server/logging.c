@@ -11,13 +11,13 @@
 void log_info(int type, const char* text) {
     switch (type) {
         case INFO:
-            syslog(LOG_INFO, text);
+            // syslog(LOG_INFO, text);
             break;
         case WARNING:
-            syslog(LOG_WARNING, text);
+            // syslog(LOG_WARNING, text);
             break;
         case ERROR:
-            syslog(LOG_CRIT, text);
+            // syslog(LOG_CRIT, text);
             break;    
         case RESPOND:
             break;  

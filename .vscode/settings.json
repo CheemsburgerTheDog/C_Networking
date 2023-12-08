@@ -5,5 +5,6 @@
         "socket.h": "c",
         "stdio.h": "c",
         "unistd.h": "c"
-    }
+    },
+    "cmake.configureOnOpen": true
 }
