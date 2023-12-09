@@ -9,7 +9,8 @@
 #include <sys/types.h>
 #include <stdbool.h>
 #define CAPACITY 10
-#define MSG_LEN 50
+#define MSG_LEN 100
+#define MSG_TYPE 10
 
 typedef struct server {
     struct sockaddr_in addr;
@@ -24,11 +25,12 @@ typedef struct user {
     int type;
     int published;
     bool active;
-    bool busy;
+    bool busy; 
     int timeout;
 } User;
 
 typedef struct message {
+    char type[10];
     char message[MSG_LEN];
 } Message;
 #endif

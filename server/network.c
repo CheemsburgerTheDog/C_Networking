@@ -18,7 +18,7 @@ static User *users;
 int g_total_capacity = 1;
 int g_current_capacity = 0;
 
-//Initialize all static values. Prepare the sockets and start listening on them. 
+void process_msg();
 int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
