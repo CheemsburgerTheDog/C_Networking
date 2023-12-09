@@ -12,6 +12,19 @@
 #define MSG_LEN 100
 #define MSG_TYPE 10
 
+#define NSPEC 0
+#define SUPPLIER 1
+#define CLIENT 2
+
+#define REGISTER 10
+#define REGISTER_SUCCESFUL 11
+#define REGISTER_FAILED 12
+
+#define LOGIN 20
+#define LOGIN_SUCCESFUL 21 
+#define LOGIN_FAILED 22
+
+
 typedef struct server {
     struct sockaddr_in addr;
     int handle;
@@ -22,15 +35,16 @@ typedef struct user {
     socklen_t len;
     int handle; //TCP ONLY
     int id;
+    int timeout;
     int type;
     int published;
     bool active;
     bool busy; 
-    int timeout;
 } User;
 
 typedef struct message {
-    char type[10];
+    int id;
+    int type;
     char message[MSG_LEN];
 } Message;
 #endif

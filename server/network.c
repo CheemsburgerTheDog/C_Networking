@@ -11,14 +11,30 @@
 #include <poll.h>
 #include "logging.c"
 #include "s_network.c"
+#include "authentication.c"
+#include <pthread.h>
 
 static Server *s_udp;
 static Server *s_tcp;
 static User *users;
 int g_total_capacity = 1;
 int g_current_capacity = 0;
+pthread_mutex_t m_poll, m_passwd, m_users;
 
-void process_msg();
+void process_msg(int connection) {
+    //TODO! Ensure the connection has not been cancelled
+    Message msg;
+    recv(connection, &msg, sizeof(Message), 0);
+    switch (msg.type) {
+        case REGISTER: //REGISTER
+            register_(connection, &msg);
+            break;
+    
+        default:
+            break;
+    }
+      
+}
 int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
@@ -28,6 +44,11 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
     memset(users, 0, sizeof(User)*g_total_capacity);
     memset(s_udp, 0, sizeof(Server));
     memset(s_tcp, 0, sizeof(Server));
+
+    pthread_mutex_init(&m_poll, NULL);
+    pthread_mutex_init(&m_passwd, NULL);
+    pthread_mutex_init(&m_users, NULL);
+
     for (size_t i = 0; i < g_total_capacity; i++) {
         users[i].len = sizeof(users->addr);
     }
@@ -59,12 +80,21 @@ void Start() {
         index = 0;
         while (index < g_total_capacity) {
             if (users[index].active == 0) {
-                users[index].handle = accept(s_tcp->handle, (struct sockaddr *) &(users[index].addr), &(users[index].len));
-                char text[] ="Witam";
-                send(users[index].handle, text, 6, 0);
-                send(users[index].handle, text, 6, 0);
-                send(users[index].handle, text, 6, 0);
-                close(users[index].handle);
+
+                int temp_handle;
+                struct sockaddr_in temp_sock;
+                socklen_t temp_len;
+                // users[index].handle = accept(s_tcp->handle, (struct sockaddr *) &(users[index].addr), &(users[index].len));
+                temp_handle = accept(s_tcp->handle, (struct sockaddr *) &temp_sock, &temp_len);
+                // pthread_mutex_lock(&m_users);
+                process_msg(temp_handle);
+
+                // g_current_capacity = g_current_capacity+1;
+                // char text[] ="Witam";
+                // send(users[index].handle, text, 6, 0);
+                // send(users[index].handle, text, 6, 0);
+                // send(users[index].handle, text, 6, 0);
+                // close(users[index].handle);
             } else { index = index+1; }
         }    
     }
