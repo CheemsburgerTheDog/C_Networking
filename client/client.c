@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
-#include "s_network.c"
+#include "/home/cheemsburger/Desktop/C_Networking/server/s_network.c"
 
 // "127.0.0.1 7777 UDP"
 int main (int argc, char* argv[]) {
@@ -38,8 +38,8 @@ int main (int argc, char* argv[]) {
         msg.type = REGISTER;
         char login[10];
         char regi[10];
-        scanf("%s", &login);
-        scanf("%s", &regi);
+        scanf("%s", login);
+        scanf("%s", regi);
         sprintf(msg.message, "%s %s %d", login, regi, 1);
         send(handle, &msg, sizeof(Message), 0);
         fflush(stdout); 

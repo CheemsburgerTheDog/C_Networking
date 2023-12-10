@@ -69,11 +69,11 @@ int register_(int connection, Message *msg) {
     Credentials credentials;
     
     token = strtok(msg->message, " "); //Extract login
-    strcpy(token, credentials.login);
+    strcpy(credentials.login, token);
     token = strtok(NULL, " "); //Extract password
-    strcpy(token, credentials.password);
+    strcpy(credentials.password, token);
     token = strtok(NULL, " "); //Extract type
-    strcpy(atoi(token), credentials.type);
+    credentials.type = atoi(token);
 
     pthread_mutex_lock(&(passwd->mutex)); //Keep the mutex for now. Connections will be handled 1by1 prolly.
     rewind(passwd->file);
@@ -93,7 +93,8 @@ int register_(int connection, Message *msg) {
         //     token = strtok(NULL, "*"); TODO! POSSIBLE ID OVERLAP!!!
         }
     }
-    fprintf(passwd->file, "%s %s %d*%d\n",credentials.login, credentials.password, credentials.type, new_id);
+    fprintf(passwd->file, "%s %s %d*%d\n", credentials.login, credentials.password, credentials.type, new_id);
+    fflush(passwd->file);
     pthread_mutex_unlock(&(passwd->mutex));
     close(connection);
     return 0;
