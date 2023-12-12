@@ -34,7 +34,7 @@ typedef struct user {
     struct sockaddr_in addr;
     socklen_t len;
     int handle; //TCP ONLY
-    int id;
+    int session_id;
     int timeout;
     int type;
     int published;
@@ -43,8 +43,8 @@ typedef struct user {
 } User;
 
 typedef struct message {
-    int id;
-    int type;
+    int session_id;
+    int code;
     char message[MSG_LEN];
 } Message;
 #endif

@@ -25,11 +25,13 @@ void process_msg(int connection) {
     //TODO! Ensure the connection has not been cancelled
     Message msg;
     recv(connection, &msg, sizeof(Message), 0);
-    switch (msg.type) {
+    switch (msg.code) {
         case REGISTER: //REGISTER
             register_(connection, &msg);
             break;
-    
+        case LOGIN: //LOGIN
+            login(connection, &msg);
+            break;
         default:
             break;
     }
