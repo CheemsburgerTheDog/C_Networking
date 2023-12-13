@@ -85,47 +85,78 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
 
 }
 //Worker thread for handling connections. 
-void worker(int max_cap) {
-    int current_capacity = 0;
-    while (true) {
-        if (current_capacity  ) {
+void worker(int listener, int max_cap) {
+    struct sockaddr_in addr;
+    socklen_t len;
+    struct epoll_event ev, events[max_cap];
+    int current_capacity = 0, connection, nfds, epollfd;
+    epollfd = epoll_create(max_cap);
+    // if (epollfd == -1) { VIP WITH LOGGING
+    //     perror("epoll_create1");
+     //     exit(EXIT_FAILURE);
+    // }
+    ev.events = EPOLLIN;
+    ev.data.fd = listener;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listener, &ev) == -1) {
+        perror("epoll_ctl: listen_sock");
+        exit(EXIT_FAILURE);
+    }
+    while (true) { // Posibble change: based on global value; SIGKILL changes the value tho false
+        if (current_capacity == max_cap) {
             continue;
         }
+        nfds = epoll_wait(epollfd, events, max_cap, -1);
+        if (nfds == -1) {
+            perror("epoll_wait");
+            exit(EXIT_FAILURE);
+        }
+        for (int n = 0; n < nfds; ++n) {
+            if (events[n].data.fd == listener) { //Accept connections
+                connection = accept(listener, (struct sockaddr *) &addr, &len);
+                //SYSLOG(CONNECTION ESTABLISHED WITH ...)
+                if (connection == -1) {
+                    perror("accept");
+                    exit(EXIT_FAILURE);
+                }
+                fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
+                ev.events = EPOLLIN | EPOLLET;
+                ev.data.fd = connection;
+                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, connection, &ev) == -1) {
+                    perror("epoll_ctl: conn_sock");
+                    exit(EXIT_FAILURE);
+                }
+            } else { process_msg(events[n].data.fd); } //Process msg from other fds (clients)
     }
         }
-    }
-
-
-}
-void Start() {
-    int index = 0;
-    while (1) {
+// void Start() {
+//     int index = 0;
+//     while (1) {
         
-        if (g_current_capacity == g_total_capacity ) {
-            continue;
-        }
-        index = 0;
-        while (index < g_total_capacity) {
-            if (users[index].active == 0) {
+//         if (g_current_capacity == g_total_capacity ) {
+//             continue;
+//         }
+//         index = 0;
+//         while (index < g_total_capacity) {
+//             if (users[index].active == 0) {
 
-                int temp_handle;
-                struct sockaddr_in temp_sock;
-                socklen_t temp_len;
-                // users[index].handle = accept(s_tcp->handle, (struct sockaddr *) &(users[index].addr), &(users[index].len));
-                temp_handle = accept(s_tcp->handle, (struct sockaddr *) &temp_sock, &temp_len);
-                // pthread_mutex_lock(&m_users);
-                process_msg(temp_handle);
+//                 int temp_handle;
+//                 struct sockaddr_in temp_sock;
+//                 socklen_t temp_len;
+//                 // users[index].handle = accept(s_tcp->handle, (struct sockaddr *) &(users[index].addr), &(users[index].len));
+//                 temp_handle = accept(s_tcp->handle, (struct sockaddr *) &temp_sock, &temp_len);
+//                 // pthread_mutex_lock(&m_users);
+//                 process_msg(temp_handle);
 
-                // g_current_capacity = g_current_capacity+1;
-                // char text[] ="Witam";
-                // send(users[index].handle, text, 6, 0);
-                // send(users[index].handle, text, 6, 0);
-                // send(users[index].handle, text, 6, 0);
-                // close(users[index].handle);
-            } else { index = index+1; }
-        }    
-    }
-}
+//                 // g_current_capacity = g_current_capacity+1;
+//                 // char text[] ="Witam";
+//                 // send(users[index].handle, text, 6, 0);
+//                 // send(users[index].handle, text, 6, 0);
+//                 // send(users[index].handle, text, 6, 0);
+//                 // close(users[index].handle);
+//             } else { index = index+1; }
+//         }    
+//     }
+// }
 
 // void respond() {
 //     recv
