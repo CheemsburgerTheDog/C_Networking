@@ -17,12 +17,11 @@
 
 static Server *s_udp;
 static Server *s_tcp;
-static User *users;
-int g_total_capacity = 1;
-int g_current_capacity = 0;
+static User *s_users;
+static int *s_capacities;
 pthread_mutex_t m_poll, m_passwd, m_users;
 
-void process_msg(int connection) {
+void process_msg(int connection, int thread_id) {
     //TODO! Ensure the connection has not been cancelled
     Message msg;
     recv(connection, &msg, sizeof(Message), 0);
@@ -31,20 +30,21 @@ void process_msg(int connection) {
             register_(connection, &msg);
             break;
         case LOGIN: //LOGIN
-            login(connection, &msg);
+            login(connection, &msg, thread_id);
             break;
         default:
             break;
     }
       
 }
-int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int capacity) {
+int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int total_capacity) {
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
     s_tcp = (Server*) malloc(sizeof(Server));
-    g_total_capacity = capacity;
-    users = (User*) malloc(sizeof(User)*g_total_capacity);
-    memset(users, 0, sizeof(User)*g_total_capacity);
+    s_users = (User*) malloc(sizeof(User)*total_capacity);
+    s_capacities = (int*) malloc(sizeof(int)*threads);
+    memset(s_capacities, 0, sizeof(int)*threads);
+    memset(s_users, 0, sizeof(User)*total_capacity);
     memset(s_udp, 0, sizeof(Server));
     memset(s_tcp, 0, sizeof(Server));
 
@@ -52,8 +52,8 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
     pthread_mutex_init(&m_passwd, NULL);
     pthread_mutex_init(&m_users, NULL);
 
-    for (size_t i = 0; i < g_total_capacity; i++) {
-        users[i].len = sizeof(users->addr);
+    for (size_t i = 0; i < total_capacity; i++) {
+        s_users[i].len = sizeof(s_users->addr);
     }
 
     s_udp->addr.sin_family = AF_INET;
@@ -74,8 +74,8 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
     listen(s_tcp->handle, tn);
 
     //Calculate thread maximum load;
-    int modulo  = capacity%threads;
-    int max_cap = (capacity-modulo)/threads;
+    int modulo  = total_capacity%threads;
+    int max_cap = (total_capacity-modulo)/threads;
     //TODO SPAWN WITH max_cap;
     while (modulo>0) {
         //spawn(worker, maxcap+1)
@@ -85,11 +85,12 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
 
 }
 //Worker thread for handling connections. 
-void worker(int listener, int max_cap) {
+void worker(int listener, int max_cap, int thread_id) {
     struct sockaddr_in addr;
     socklen_t len;
     struct epoll_event ev, events[max_cap];
-    int current_capacity = 0, connection, nfds, epollfd;
+    int connection, nfds, epollfd;
+    s_capacities[thread_id] = 1;
     epollfd = epoll_create(max_cap);
     // if (epollfd == -1) { VIP WITH LOGGING
     //     perror("epoll_create1");
@@ -102,9 +103,7 @@ void worker(int listener, int max_cap) {
         exit(EXIT_FAILURE);
     }
     while (true) { // Posibble change: based on global value; SIGKILL changes the value tho false
-        if (current_capacity == max_cap) {
-            continue;
-        }
+        if (s_capacities[thread_id] == max_cap) { continue; }
         nfds = epoll_wait(epollfd, events, max_cap, -1);
         if (nfds == -1) {
             perror("epoll_wait");
@@ -113,11 +112,12 @@ void worker(int listener, int max_cap) {
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == listener) { //Accept connections
                 connection = accept(listener, (struct sockaddr *) &addr, &len);
+
                 //SYSLOG(CONNECTION ESTABLISHED WITH ...)
                 if (connection == -1) {
                     perror("accept");
                     exit(EXIT_FAILURE);
-                }
+                } else { s_capacities[thread_id]  = s_capacities[thread_id]+1;}
                 fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
                 ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connection;
@@ -125,7 +125,7 @@ void worker(int listener, int max_cap) {
                     perror("epoll_ctl: conn_sock");
                     exit(EXIT_FAILURE);
                 }
-            } else { process_msg(events[n].data.fd); } //Process msg from other fds (clients)
+            } else { process_msg(events[n].data.fd, thread_id); } //Process msg from other fds (clients)
     }
         }
 // void Start() {

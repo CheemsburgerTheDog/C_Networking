@@ -28,15 +28,16 @@ static Passwd *passwd;
 
 int _gen_session_id();
 int _send_status(int connection, int code, bool close);
+void clock();
+
 void InitPasswd(char path[]) {
     srand(time(NULL));
-    // int r = rand();
     passwd = (Passwd*) malloc(sizeof(Passwd));
     pthread_mutex_init(&(passwd->mutex), NULL);
     passwd->file = fopen(path, "a+");
 }
 //Login user into the system
-int login(int connection, Message *msg) {
+int login(int connection, Message *msg, int thread_id) {
     Credentials credentials;
     char line_buff[BUFF_SIZE];
     char *token;
@@ -57,14 +58,32 @@ int login(int connection, Message *msg) {
                 token = strtok(NULL, " ");
                 credentials.type = atoi(token);
                 pthread_mutex_unlock(&(passwd->mutex));
-
-                printf("Zalogowano %s %s %d %d",credentials.login, credentials.password, credentials.type);
-                return 0;
+                ///////////////INSERTING USER////////////////
+                bool done = true;
+                pthread_mutex_lock(&m_users);
+                int i = 0;
+                while (1) { //LOWER-LEVEL GUARANTEE OF FREE SPACE THOU ERROR PRONE
+                    if ( s_users[i].active == false) {
+                        s_users[i].active = true;
+                        s_users[i].busy = false;
+                        s_users[i].handle = connection;
+                        s_users[i].published = 0;
+                        s_users[i].session_id = session_id;
+                        s_users[i].timeout = 300; //Seconds
+                        s_users[i].type = credentials.type;
+                        pthread_mutex_unlock(&m_users);
+                        _send_status(connection, LOGIN_SUCCESFUL, false);
+                        return 0;
+                        break;
+                    }
+                    i = i+1;
+                }
+                ///////////// END OF INSERTING ///////////////
             }             
-        }  /* TODO! recv() close(socket); */ 
+        }
     }
-    Message respond;
     pthread_mutex_unlock(&(passwd->mutex));
+    _send_status(connection, LOGIN_FAILED, true);
     return 1;
 }
 //Register user in passwd
@@ -129,22 +148,29 @@ int _send_status(int connection, int code, bool _close) {
     }
     
 }
-//Find a free spot and insert newly logged user into users array.
-void _insert_new_user(int connection, Credentials *creds, int session_id) {
-    bool done = true;
-    int i = 0;
-    pthread_mutex_lock(&m_users);
-    while (done) {
-        if ( users[i].active == false) {
-            users[i].active = true;
-            users[i].busy = false;
-            users[i].handle = connection;
-            users[i].published = 0;
-            users[i].session_id = session_id;
-            users[i].timeout = 300;
-            users[i].type = creds->type;
-        } 
+
+void clock() {
+    int elapsed = 
+    while(1) {
+        sleep(1);
     }
+}
+//Find a free spot and insert newly logged user into users array.
+// void _insert_new_user(int connection, Credentials *creds, int session_id) {
+//     bool done = true;
+//     int i = 0;
+//     pthread_mutex_lock(&m_users);
+//     while (done) {
+//         if ( users[i].active == false) {
+//             users[i].active = true;
+//             users[i].busy = false;
+//             users[i].handle = connection;
+//             users[i].published = 0;
+//             users[i].session_id = session_id;
+//             users[i].timeout = 300;
+//             users[i].type = creds->type;
+//         } 
+//     }
     
 }
 #endif
