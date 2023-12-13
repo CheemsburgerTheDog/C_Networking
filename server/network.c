@@ -13,6 +13,7 @@
 #include "s_network.c"
 #include "authentication.c"
 #include <pthread.h>
+#include <sys/epoll.h>
 
 static Server *s_udp;
 static Server *s_tcp;
@@ -37,7 +38,7 @@ void process_msg(int connection) {
     }
       
 }
-int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
+int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int capacity) {
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
     s_tcp = (Server*) malloc(sizeof(Server));
@@ -68,14 +69,38 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int capacity) {
     s_tcp->addr.sin_port = htons(tport);
     temp = socket(AF_INET, SOCK_STREAM, 0);
     s_tcp->handle = temp;
-    // fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK) == -1 ) { log_info(ERROR, "TCP socket fnctl failure"); }
+    fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK);
     bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr));
     listen(s_tcp->handle, tn);
+
+    //Calculate thread maximum load;
+    int modulo  = capacity%threads;
+    int max_cap = (capacity-modulo)/threads;
+    //TODO SPAWN WITH max_cap;
+    while (modulo>0) {
+        //spawn(worker, maxcap+1)
+        modulo = modulo -1;
+    }
+    
+
 }
-//Begin accepting connections till total_capacity is reached. Needs to be run on a separete thread as it's only updating User array with new handles and active = true in-place. It does not recover any incoming data from the socket.
+//Worker thread for handling connections. 
+void worker(int max_cap) {
+    int current_capacity = 0;
+    while (true) {
+        if (current_capacity  ) {
+            continue;
+        }
+    }
+        }
+    }
+
+
+}
 void Start() {
     int index = 0;
     while (1) {
+        
         if (g_current_capacity == g_total_capacity ) {
             continue;
         }
