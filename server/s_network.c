@@ -24,6 +24,10 @@
 #define LOGIN_SUCCESFUL 21 
 #define LOGIN_FAILED 22
 
+#define USER_TIMEOUT 50
+#define OFFER_TIMEOUT 51
+
+
 
 typedef struct server {
     struct sockaddr_in addr;

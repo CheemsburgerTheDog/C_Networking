@@ -8,6 +8,7 @@
 #include <string.h>
 #define _GNU_SOURCE
 #include <sys/socket.h>
+#include "network.c"
 #include "logging.c"
 #include  "s_network.c"
 #define BUFF_SIZE 30
@@ -26,9 +27,8 @@ typedef struct {
 
 static Passwd *passwd;
 
-int _gen_session_id();
 int _send_status(int connection, int code, bool close);
-void clock();
+void clock_();
 
 void InitPasswd(char path[]) {
     srand(time(NULL));
@@ -37,7 +37,7 @@ void InitPasswd(char path[]) {
     passwd->file = fopen(path, "a+");
 }
 //Login user into the system
-int login(int connection, Message *msg, int thread_id) {
+int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users) {
     Credentials credentials;
     char line_buff[BUFF_SIZE];
     char *token;
@@ -46,7 +46,7 @@ int login(int connection, Message *msg, int thread_id) {
     strcpy(credentials.login, token);
     token = strtok(NULL, " "); //Extract password
     strcpy(credentials.password, token);
-    int session_id = _gen_session_id(); //Get session id;
+    // int session_id = _gen_session_id(); //Get session id;
 
     pthread_mutex_lock(&(passwd->mutex));
     rewind(passwd->file);
@@ -60,7 +60,7 @@ int login(int connection, Message *msg, int thread_id) {
                 pthread_mutex_unlock(&(passwd->mutex));
                 ///////////////INSERTING USER////////////////
                 bool done = true;
-                pthread_mutex_lock(&m_users);
+                pthread_mutex_lock(m_users);
                 int i = 0;
                 while (1) { //LOWER-LEVEL GUARANTEE OF FREE SPACE THOU ERROR PRONE
                     if ( s_users[i].active == false) {
@@ -68,7 +68,7 @@ int login(int connection, Message *msg, int thread_id) {
                         s_users[i].busy = false;
                         s_users[i].handle = connection;
                         s_users[i].published = 0;
-                        s_users[i].session_id = session_id;
+                        // s_users[i].session_id = session_id;
                         s_users[i].timeout = 300; //Seconds
                         s_users[i].type = credentials.type;
                         pthread_mutex_unlock(&m_users);
@@ -120,24 +120,24 @@ int register_(int connection, Message *msg) {
 }
 
 //Generate unique session id based on users array
-int _gen_session_id() {
-    bool avaiable = true;
-    pthread_mutex_lock(&m_users);
-    while (1) {
-        avaiable = true;
-        int c_session_id = rand()%1000000;
-        for (int i = 0; i<g_total_capacity; i++) {
-            if ( users[i].session_id ==  c_session_id) {
-                avaiable = false; 
-                break; 
-            }
-        }
-        if (avaiable == true) { 
-            pthread_mutex_unlock(&m_users);
-            return c_session_id; 
-        }
-    }
-}
+// int _gen_session_id() {
+//     bool avaiable = true;
+//     pthread_mutex_lock(&m_users);
+//     while (1) {
+//         avaiable = true;
+//         int c_session_id = rand()%1000000;
+//         for (int i = 0; i<g_total_capacity; i++) {
+//             if ( users[i].session_id ==  c_session_id) {
+//                 avaiable = false; 
+//                 break; 
+//             }
+//         }
+//         if (avaiable == true) { 
+//             pthread_mutex_unlock(&m_users);
+//             return c_session_id; 
+//         }
+//     }
+// }
 //Send status-only message. Used only for clarity;
 int _send_status(int connection, int code, bool _close) {
     Message msg;
@@ -149,12 +149,14 @@ int _send_status(int connection, int code, bool _close) {
     
 }
 
-void clock() {
-    int elapsed = 
-    while(1) {
-        sleep(1);
-    }
-}
+// void clock() {
+//     int elapsed = 0;
+//     while(1) {
+//         pthread_mutex_lock(&m_users);
+//         for 
+//         sleep(1);
+//     }
+// }
 //Find a free spot and insert newly logged user into users array.
 // void _insert_new_user(int connection, Credentials *creds, int session_id) {
 //     bool done = true;
@@ -172,5 +174,4 @@ void clock() {
 //         } 
 //     }
     
-}
 #endif

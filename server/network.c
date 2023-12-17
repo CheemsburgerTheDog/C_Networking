@@ -14,13 +14,17 @@
 #include "authentication.c"
 #include <pthread.h>
 #include <sys/epoll.h>
-
+//UDP listener data
 static Server *s_udp;
+//TCP listener data
 static Server *s_tcp;
+//Array of users 
 static User *s_users;
+//Array of cappacities of particular thread
 static int *s_capacities;
+//Mutexes
 pthread_mutex_t m_poll, m_passwd, m_users;
-
+//Process incoming struct with messages accoring to the message code
 void process_msg(int connection, int thread_id) {
     //TODO! Ensure the connection has not been cancelled
     Message msg;
@@ -79,13 +83,14 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
     //TODO SPAWN WITH max_cap;
     while (modulo>0) {
         //spawn(worker, maxcap+1)
+        worker(s_tcp->handle, 20, 0);
         modulo = modulo -1;
     }
     
 
 }
 //Worker thread for handling connections. 
-void worker(int listener, int max_cap, int thread_id) {
+void worker(int listener, int max_cap, int thread_id ) {
     struct sockaddr_in addr;
     socklen_t len;
     struct epoll_event ev, events[max_cap];
