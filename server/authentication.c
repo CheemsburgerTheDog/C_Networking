@@ -37,7 +37,7 @@ void InitPasswd(char path[]) {
     passwd->file = fopen(path, "a+");
 }
 //Login user into the system
-int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users) {
+int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users, User *s_users) {
     Credentials credentials;
     char line_buff[BUFF_SIZE];
     char *token;
@@ -71,7 +71,7 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users)
                         // s_users[i].session_id = session_id;
                         s_users[i].timeout = 300; //Seconds
                         s_users[i].type = credentials.type;
-                        pthread_mutex_unlock(&m_users);
+                        pthread_mutex_unlock(m_users);
                         _send_status(connection, LOGIN_SUCCESFUL, false);
                         return 0;
                         break;

@@ -14,19 +14,15 @@
 #include "authentication.c"
 #include <pthread.h>
 #include <sys/epoll.h>
-//UDP listener data
+
 static Server *s_udp;
-//TCP listener data
-static Server *s_tcp;
-//Array of users 
+static Server *s_tcp; 
 static User *s_users;
-//Array of cappacities of particular thread
 static int *s_capacities;
-//Mutexes
 pthread_mutex_t m_poll, m_passwd, m_users;
-//Process incoming struct with messages accoring to the message code
+
+void worker(int, int, int);
 void process_msg(int connection, int thread_id) {
-    //TODO! Ensure the connection has not been cancelled
     Message msg;
     recv(connection, &msg, sizeof(Message), 0);
     switch (msg.code) {
@@ -34,13 +30,14 @@ void process_msg(int connection, int thread_id) {
             register_(connection, &msg);
             break;
         case LOGIN: //LOGIN
-            login(connection, &msg, thread_id);
+            login(connection, &msg, thread_id, &m_users, s_users);
             break;
         default:
             break;
     }
       
 }
+//Initialize ports, all data structures, run threads
 int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int total_capacity) {
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
@@ -60,14 +57,6 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
         s_users[i].len = sizeof(s_users->addr);
     }
 
-    s_udp->addr.sin_family = AF_INET;
-    s_udp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    s_udp->addr.sin_port = htons(uport);
-    temp = socket(AF_INET, SOCK_DGRAM, 0);
-    s_udp->handle = temp;
-    bind (s_udp->handle, (struct sockaddr *) &(s_udp->addr), sizeof(s_udp->addr));
-    listen(s_udp->handle, un);
-
     s_tcp->addr.sin_family = AF_INET;
     s_tcp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
     s_tcp->addr.sin_port = htons(tport);
@@ -77,12 +66,10 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
     bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr));
     listen(s_tcp->handle, tn);
 
-    //Calculate thread maximum load;
     int modulo  = total_capacity%threads;
     int max_cap = (total_capacity-modulo)/threads;
-    //TODO SPAWN WITH max_cap;
+
     while (modulo>0) {
-        //spawn(worker, maxcap+1)
         worker(s_tcp->handle, 20, 0);
         modulo = modulo -1;
     }
@@ -133,38 +120,6 @@ void worker(int listener, int max_cap, int thread_id ) {
             } else { process_msg(events[n].data.fd, thread_id); } //Process msg from other fds (clients)
     }
         }
-// void Start() {
-//     int index = 0;
-//     while (1) {
-        
-//         if (g_current_capacity == g_total_capacity ) {
-//             continue;
-//         }
-//         index = 0;
-//         while (index < g_total_capacity) {
-//             if (users[index].active == 0) {
-
-//                 int temp_handle;
-//                 struct sockaddr_in temp_sock;
-//                 socklen_t temp_len;
-//                 // users[index].handle = accept(s_tcp->handle, (struct sockaddr *) &(users[index].addr), &(users[index].len));
-//                 temp_handle = accept(s_tcp->handle, (struct sockaddr *) &temp_sock, &temp_len);
-//                 // pthread_mutex_lock(&m_users);
-//                 process_msg(temp_handle);
-
-//                 // g_current_capacity = g_current_capacity+1;
-//                 // char text[] ="Witam";
-//                 // send(users[index].handle, text, 6, 0);
-//                 // send(users[index].handle, text, 6, 0);
-//                 // send(users[index].handle, text, 6, 0);
-//                 // close(users[index].handle);
-//             } else { index = index+1; }
-//         }    
-//     }
-// }
-
-// void respond() {
-//     recv
-// }
+}
 
 #endif

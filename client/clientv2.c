@@ -17,10 +17,11 @@ void register_(int handle);
 void perror_(const char *text);
 void supplier_mode();
 void client_mode();
+
 int main (int argc, char* argv[]) {
-    run(argv[1], atoi(argv[2]));
+    run("127.0.0.1", 7030);
 }
-void login(int handle) {
+void login_(int handle) {
     Message msg;
     msg.code = LOGIN;
     char login[10];
@@ -32,36 +33,33 @@ void login(int handle) {
     printf("Podaj haslo: ");
     scanf("%s", passwd);
     printf("\n");
-    sprintf(msg.message, "%s %s %d", login, passwd, 1);
+    sprintf(msg.message, "%s %s", login, passwd);
     send(handle, &msg, sizeof(Message), 0);
     recv_(handle, &msg);
     switch (msg.code) {
         case LOGIN_SUCCESFUL:
             if (strcmp("1", msg.message) == 0) {
-                //client_mode();
+                client_mode();
             } else { supplier_mode(); }
             break;
         case LOGIN_FAILED:
             perror_("Login failed");
     }
-
-
 }
 inline void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
         perror_("! Connection lost !");
+        exit(1);
     }
 }
 
 inline void perror_(const char *text) {
     if (handle > 1) { close(handle); }
-    printf(text);
+    printf("%s", text);
     exit(1);
 }
 void run(char *ip, int port) {
     int choice = 0;
-    char received[6];
-    int mode = 0;
     struct sockaddr_in saddr;
     username = (char*) malloc(sizeof(char)*10);
 
@@ -71,7 +69,7 @@ void run(char *ip, int port) {
     saddr.sin_port = htons(port);
     handle = socket(AF_INET, SOCK_STREAM, 0);
     if (connect(handle, (struct sockaddr*) &saddr, sizeof(saddr)) == -1) { perror_("! Connection failed !"); }
-    printf("Welcome to our platform. Please login or register:\n1. Login\n2. Register\nUser# ");
+    printf("Welcome to our platform. Please login or register:\n1. Login\n2. Register\n# ");
     scanf("%d", &choice);
     switch (choice) {
         case 1:
@@ -85,6 +83,39 @@ void run(char *ip, int port) {
             break;
     }
     close(handle);
-    return 0;
+}
+void register_(int handle) {
+    Message msg;
+    msg.code = REGISTER;
+    char login[10];
+    char passwd[10];
+    int type;
+    system("clear");
+    printf("Enter login: ");
+    scanf("%s", login);
+    printf("\n");
+    printf("Enter password: ");
+    scanf("%s", passwd);
+    printf("\n");
+    printf("Choose account type.\n1. Client\n2. Supplier\n# ");
+    scanf("%d", &type);
+    printf("\n");
+    sprintf(msg.message, "%s %s %d", login, passwd, type);
+    send(handle, &msg, sizeof(Message), 0);
+    recv_(handle, &msg);
+    switch (msg.code) {
+        case REGISTER_SUCCESFUL:
+            printf("Registration succesful. Reenter the app to login.");
+            exit(0);
+            break;
+        case REGISTER_FAILED:
+            perror_("Registration failed. Invalid format or credentials taken");
+    }
 
+}
+void client_mode() {
+    return;
+}
+void supplier_mode() {
+    return;
 }
