@@ -46,8 +46,14 @@ void login_(int handle) {
             perror_("Login failed");
     }
 }
-inline void recv_(int handle, Message *msg){
+void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
+        perror_("! Connection lost !");
+        exit(1);
+    }
+}
+void send_(int handle, Message *msg){
+    if (send(handle, msg, sizeof(Message), 0) == -1) {
         perror_("! Connection lost !");
         exit(1);
     }

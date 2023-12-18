@@ -27,6 +27,8 @@
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
 
+#define HERROR 60
+
 
 
 typedef struct server {

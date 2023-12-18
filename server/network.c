@@ -21,10 +21,16 @@ static User *s_users;
 static int *s_capacities;
 pthread_mutex_t m_poll, m_passwd, m_users;
 
+int recv_(int, Message*);
 void worker(int, int, int);
+void term_thread(const char*, int, int);
+
 void process_msg(int connection, int thread_id) {
     Message msg;
-    recv(connection, &msg, sizeof(Message), 0);
+    if ( recv_(connection, &msg) == -1) {
+        return;
+    };
+    
     switch (msg.code) {
         case REGISTER: //REGISTER
             register_(connection, &msg);
@@ -39,6 +45,7 @@ void process_msg(int connection, int thread_id) {
 }
 //Initialize ports, all data structures, run threads
 int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int total_capacity) {
+    openlog("CHEEMS", LOG_PERROR, LOG_USER);
     int temp;
     s_udp = (Server*) malloc(sizeof(Server));
     s_tcp = (Server*) malloc(sizeof(Server));
@@ -64,13 +71,12 @@ int InitServer(char *ip, int tport, int tn, int uport, int un, int threads, int 
     s_tcp->handle = temp;
     fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK);
     bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr));
-    listen(s_tcp->handle, tn);
-
+    if ( listen(s_tcp->handle, tn) == -1){ syslog(LOG_EMERG, "M %s", "Error at listening"); }
     int modulo  = total_capacity%threads;
     int max_cap = (total_capacity-modulo)/threads;
+    worker(s_tcp->handle, 10, 0);
 
     while (modulo>0) {
-        worker(s_tcp->handle, 20, 0);
         modulo = modulo -1;
     }
     
@@ -84,32 +90,20 @@ void worker(int listener, int max_cap, int thread_id ) {
     int connection, nfds, epollfd;
     s_capacities[thread_id] = 1;
     epollfd = epoll_create(max_cap);
-    // if (epollfd == -1) { VIP WITH LOGGING
-    //     perror("epoll_create1");
-     //     exit(EXIT_FAILURE);
-    // }
+    if (epollfd == -1) { term_thread("EPOLL FAILED", LOG_ALERT, thread_id); }    
     ev.events = EPOLLIN;
     ev.data.fd = listener;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listener, &ev) == -1) {
-        perror("epoll_ctl: listen_sock");
-        exit(EXIT_FAILURE);
-    }
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, listener, &ev) == -1) { term_thread("EPOLL FAILED", LOG_ALERT, thread_id); }
     while (true) { // Posibble change: based on global value; SIGKILL changes the value tho false
         if (s_capacities[thread_id] == max_cap) { continue; }
         nfds = epoll_wait(epollfd, events, max_cap, -1);
-        if (nfds == -1) {
-            perror("epoll_wait");
-            exit(EXIT_FAILURE);
-        }
+        if (nfds == -1) { term_thread("EPOLL FAILED", LOG_ALERT, thread_id); }
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == listener) { //Accept connections
                 connection = accept(listener, (struct sockaddr *) &addr, &len);
-
-                //SYSLOG(CONNECTION ESTABLISHED WITH ...)
-                if (connection == -1) {
-                    perror("accept");
-                    exit(EXIT_FAILURE);
-                } else { s_capacities[thread_id]  = s_capacities[thread_id]+1;}
+                if (connection == -1) { 
+                    continue;
+                } else { s_capacities[thread_id]  = s_capacities[thread_id]+1; }
                 fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
                 ev.events = EPOLLIN | EPOLLET;
                 ev.data.fd = connection;
@@ -121,5 +115,19 @@ void worker(int listener, int max_cap, int thread_id ) {
     }
         }
 }
-
+inline void term_thread(const char *err, int type, int id) {
+    syslog(type, "T%d: %s", id, err);
+    pthread_exit(NULL);
+}
+int recv_(int handle, Message *msg){
+    if (recv(handle, msg, sizeof(Message), 0) == -1) {
+        int i = 0;
+        while (1) {
+            if (s_users[i].handle == handle) {
+                close(handle);
+                return -1;
+            } 
+       }
+    } else { return 0; }
+}
 #endif
