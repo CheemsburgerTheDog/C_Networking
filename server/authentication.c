@@ -14,6 +14,8 @@
 #define BUFF_SIZE 30
 #define CRED_SIZE 10
 #include<pthread.h>
+static User *l_users;
+
 typedef struct {
     char login[CRED_SIZE];
     char password[CRED_SIZE];
@@ -27,26 +29,26 @@ typedef struct {
 
 static Passwd *passwd;
 
-int _send_status(int connection, int code, bool close);
-void clock_();
+void *clock_(void*);
 
+//DONE Initializes passwd file at path.
 void InitPasswd(char path[]) {
-    srand(time(NULL));
+    // srand(time(NULL));
     passwd = (Passwd*) malloc(sizeof(Passwd));
     pthread_mutex_init(&(passwd->mutex), NULL);
     passwd->file = fopen(path, "a+");
 }
-//Login user into the system
+
+//DONE Login user by adding him to the users array. 
 int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users, User *s_users) {
     Credentials credentials;
     char line_buff[BUFF_SIZE];
     char *token;
 
-    token = strtok(msg->message, " "); //Extract login
+    token = strtok(msg->message, " ");
     strcpy(credentials.login, token);
-    token = strtok(NULL, " "); //Extract password
+    token = strtok(NULL, " ");
     strcpy(credentials.password, token);
-    // int session_id = _gen_session_id(); //Get session id;
 
     pthread_mutex_lock(&(passwd->mutex));
     rewind(passwd->file);
@@ -54,7 +56,7 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
         token = strtok(line_buff, " ");
         if (strcmp(token, credentials.login) == 0 ) {
             token = strtok(NULL, " ");
-            if (strcmp(token, credentials.password) == 0) { //If match found insert new user
+            if (strcmp(token, credentials.password) == 0) {
                 token = strtok(NULL, " ");
                 credentials.type = atoi(token);
                 pthread_mutex_unlock(&(passwd->mutex));
@@ -72,9 +74,8 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
                         s_users[i].timeout = 300; //Seconds
                         s_users[i].type = credentials.type;
                         pthread_mutex_unlock(m_users);
-                        _send_status(connection, LOGIN_SUCCESFUL, false);
+                        send_(connection, LOGIN_SUCCESFUL, NULL);
                         return 0;
-                        break;
                     }
                     i = i+1;
                 }
@@ -83,10 +84,12 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
         }
     }
     pthread_mutex_unlock(&(passwd->mutex));
-    _send_status(connection, LOGIN_FAILED, true);
+    send_(connection, LOGIN_FAILED, NULL);
+    close(connection);
     return 1;
 }
-//Register user in passwd
+
+//DONE Register user in passwd file then close the connection.
 int register_(int connection, Message *msg) {
     int counter = 0;
     char *token;
@@ -107,7 +110,8 @@ int register_(int connection, Message *msg) {
         token = strtok(line_buff, " ");
         if (strcmp(token, credentials.login) == 0 ) { // REGISTER FAILED - NAME TAKEN
                 pthread_mutex_unlock(&(passwd->mutex));
-                _send_status(connection, REGISTER_FAILED, true);
+                send_(connection, REGISTER_FAILED, NULL);
+                close(connection);
                 return 1;
         }
     }
@@ -115,8 +119,24 @@ int register_(int connection, Message *msg) {
     fprintf(passwd->file, "%s %s %d\n", credentials.login, credentials.password, credentials.type); //Print new credentials into passwd
     fflush(passwd->file);
     pthread_mutex_unlock(&(passwd->mutex));
-    _send_status(connection, REGISTER_SUCCESFUL, true);
+    send_(connection, REGISTER_SUCCESFUL, NULL);
+    close(connection);
     return 0;
+}
+//VIP 
+void *clock_(void *str) { 
+    int t_size = ((Sclock*)str)->size;
+    l_users = ((Sclock*)str)->ptr;
+    while(1) {
+        sleep(1);
+        for (size_t i = 0; i < t_size; i++) {
+            if (l_users[i].active == true) {
+                l_users[i].timeout = l_users[i].timeout - 1;
+                printf("%d\n",l_users[i].timeout);
+            }
+        }
+        fflush(stdout);
+    }
 }
 
 //Generate unique session id based on users array
@@ -139,15 +159,7 @@ int register_(int connection, Message *msg) {
 //     }
 // }
 //Send status-only message. Used only for clarity;
-int _send_status(int connection, int code, bool _close) {
-    Message msg;
-    msg.code = code;
-    send(connection, &msg, sizeof(Message), 0);
-    if (_close) {
-        close(connection);
-    }
-    
-}
+
 
 // void clock() {
 //     int elapsed = 0;

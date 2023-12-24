@@ -24,6 +24,14 @@
 #define LOGIN_SUCCESFUL 21 
 #define LOGIN_FAILED 22
 
+#define NEW_OFFER 31
+#define NEW_ACCEPTED 32
+#define NEW_DECLINED 33
+#define ACCEPT_OFFER 34
+#define ACCEPT_ACCEPT 35
+#define ACCEPT_DECLINE 36
+#define INPROGRESS 37
+
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
 
@@ -34,6 +42,7 @@
 typedef struct server {
     struct sockaddr_in addr;
     int handle;
+    int max_cap;
 } Server;
 
 typedef struct user {
@@ -48,9 +57,30 @@ typedef struct user {
     bool busy; 
 } User;
 
+typedef struct tinfo {
+    int max;
+    int id;
+} Tinfo;
+
 typedef struct message {
     int session_id;
     int code;
     char message[MSG_LEN];
 } Message;
+
+typedef struct sclock {
+    int size;
+    User *ptr;
+} Sclock;
+
+typedef struct offer {
+    int done;
+    int cli_handle;
+    int sup_handle;
+    int id;
+    int eta;
+    char client_name[10];
+    char resource[20];
+    int quantity;
+} Offer;
 #endif

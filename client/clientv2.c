@@ -45,6 +45,7 @@ void login_(int handle) {
         case LOGIN_FAILED:
             perror_("Login failed");
     }
+    close(handle);
 }
 void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
