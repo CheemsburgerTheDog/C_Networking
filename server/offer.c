@@ -1,16 +1,22 @@
 #ifndef OFFER
 #define OFFER
 #include "s_network.c"
-#include "network.c"
+#include "network.c" 
+int g_offer_id = 1;
+
 void receive_new();
 void propagate();
+void accept_supplier(int, Message*, Offer*, int, pthread_mutex_t*);
+void _gen_offer_id();
 
-void receive_new(int connection, Message *msg, Offer *olist, int nl, User *ulist, int nu) {
-    for (size_t i = 0; i < nl; i++) {
-        if (olist[i].done == 1 ) {
-            // 1203 PESPO 3500 DREWNO 15
+void receive_new(int connection, Message *msg, Offer *olist, int no, User *ulist, int nu) {
+    for (size_t i = 0; i < no; i++) {
+        if (olist[i].phase == 2 ) {
+            if (send_(connection, NEW_ACCEPTED, NULL) == -1) { return; }
+            //PESPO 3500 DREWNO 15
             sscanf(msg->message,"%d %s %d %s %d",&olist[i].id, olist[i].client_name, &olist[i].eta, olist[i].resource, &olist[i].quantity);
-            send_(connection, NEW_ACCEPTED, NULL);
+            olist[i].phase = 0;
+            ulist[i]
             propagate(msg, ulist, nu);
             return;
         }
@@ -27,6 +33,40 @@ void request_all(int connection, Offer *list, int n) {
     }
     
 }
+void accept_supplier(int connection, Message *msg, Offer *list, int ln, pthread_mutex_t *mut) {
+    int id;
+    sscanf(msg->message, "%d", &id);
+    pthread_mutex_lock(mut);
+    for (size_t i = 0; i < ln; i++) {
+        if (list[i].id == id) {
+            if (list[i].phase == (1||2)) {
+                send_(connection, ACCEPT_DECLINE, NULL);
+            } else {
+                if (send_(connection, ACCEPT_ACCEPT , msg) == -1) {
+                    pthread_mutex_unlock(mut);
+                    return;
+                } else {
+                    list[i].phase = 1;
+                    pthread_mutex_unlock(mut);
+                    return;
+                    //VIP ustawic pedalow na BUSY
+                }
+            }
+        }    
+    }
+}
+
+void finilize_offer(int connection, Message *msg, Offer *olist, int on, pthread_mutex_t *omut, User *ulist, int un, pthread_mutex_t *umut) {
+    int id;
+    sscanf(msg->message, "%d", &id);
+    pthread_mutex_lock(omut);
+    
+
+
+
+}
+    
+
 inline void propagate(Message *msg, User *list, int n) {
     for (size_t i = 0; i < n; i++) {
         if (list[i].type == SUPPLIER && list[i].active == true && list[i].busy == false) { 

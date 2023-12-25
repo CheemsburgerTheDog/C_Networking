@@ -139,25 +139,24 @@ void *clock_(void *str) {
     }
 }
 
-//Generate unique session id based on users array
-// int _gen_session_id() {
-//     bool avaiable = true;
-//     pthread_mutex_lock(&m_users);
-//     while (1) {
-//         avaiable = true;
-//         int c_session_id = rand()%1000000;
-//         for (int i = 0; i<g_total_capacity; i++) {
-//             if ( users[i].session_id ==  c_session_id) {
-//                 avaiable = false; 
-//                 break; 
-//             }
-//         }
-//         if (avaiable == true) { 
-//             pthread_mutex_unlock(&m_users);
-//             return c_session_id; 
-//         }
-//     }
-// }
+int _gen_session_id() {
+    bool avaiable = true;
+    pthread_mutex_lock(&m_users);
+    while (1) {
+        avaiable = true;
+        int c_session_id = rand()%1000000;
+        for (int i = 0; i<g_total_capacity; i++) {
+            if ( users[i].session_id ==  c_session_id) {
+                avaiable = false; 
+                break; 
+            }
+        }
+        if (avaiable == true) { 
+            pthread_mutex_unlock(&m_users);
+            return c_session_id; 
+        }
+    }
+}
 //Send status-only message. Used only for clarity;
 
 

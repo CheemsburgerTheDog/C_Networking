@@ -74,7 +74,10 @@ typedef struct sclock {
 } Sclock;
 
 typedef struct offer {
-    int done;
+    //0 -> open
+    //1 -> in progrress
+    //2 -> done
+    int phase;
     int cli_handle;
     int sup_handle;
     int id;

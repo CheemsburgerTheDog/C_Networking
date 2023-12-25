@@ -140,7 +140,7 @@ void process_msg(int connection, int thread_id) {
             login(connection, &msg, thread_id, &m_users, s_users);
             break;
         case NEW_OFFER:
-            add_offer(connection, &msg, );
+            receive_new();
             break;
         case ACCEPT_OFFER:
             elect_supplier(connection, &msg, &m_users, s_users, &m_offers, s_offer);
