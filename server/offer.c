@@ -17,6 +17,11 @@ void receive_new(int connection, Message *msg, Offer *olist, int no, User *ulist
                 return; 
             }
             olist[i].phase = 0;
+            int max = 0;
+            for (size_t d = 0; d < no; d++) {
+                if (max <= olist[d].id) { max = olist[d].id; }
+            }
+            olist[i].id = max+1;
             pthread_mutex_unlock(offer_mut);
             //PESPO 3500 DREWNO 15
             sscanf(msg->message,"%s %d %s %d", olist[i].client_name, &olist[i].eta, olist[i].resource, &olist[i].quantity);

@@ -194,6 +194,7 @@ inline int send_(int handle, int code, Message *msg){
         int i = 0;
         while (1) {
             if (g_users[i].handle == handle) {
+                g_users[i].active = false;
                 close(handle);
                 if (clear == 1) { free(msg); }
                 return -1;

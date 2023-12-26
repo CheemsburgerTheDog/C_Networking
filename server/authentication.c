@@ -141,16 +141,26 @@ void *clock_(void *str) {
             ((Sclock*)str)->optr[i].eta = ((Sclock*)str)->optr[i].eta - 1;
             if (((Sclock*)str)->optr[i].eta < 0) {
                 ((Sclock*)str)->optr[i].phase = 2;
-                inform_expired();
+                send_(((Sclock*)str)->optr[i].cli_handle, OFFER_TIMEOUT, NULL);
+                int j = 0;
+                while (1) {
+                    if ( ((Sclock*)str)->optr[i].cli_handle == ((Sclock*)str)->uptr[j].handle ) {
+                        ((Sclock*)str)->uptr[j].busy = false; 
+                    }
+                    j = j+1;
+                }
             } else {
-                printf("%d %s\n",((Sclock*)str)->optr[i].eta, ((Sclock*)str)->optr[i].resource);
+                //ID  ETA NAME RESOURCE QUA
+                printf("%d %d %s %s %d\n",
+                ((Sclock*)str)->optr[i].id,
+                ((Sclock*)str)->optr[i].eta,
+                ((Sclock*)str)->optr[i].client_name,
+                ((Sclock*)str)->optr[i].resource,
+                ((Sclock*)str)->optr[i].quantity);
             }
         }
         fflush(stdout);
     }
-}
-void inform_expired(){
-    return;
 }
 
 // int _gen_session_id() {

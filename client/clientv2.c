@@ -3,12 +3,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
 #include "/home/cheemsburger/Desktop/C_Networking/server/s_network.c"
 static int handle;
 static char *username;
+static int f_nonblock = 0;
 // "127.0.0.1 7777 UDP"
 void run(char *ip, int port);
 void recv_(int handle, Message *msg);
@@ -60,6 +62,7 @@ void run(char *ip, int port) {
     saddr.sin_port = htons(port);
     handle = socket(AF_INET, SOCK_STREAM, 0);
     if (connect(handle, (struct sockaddr*) &saddr, sizeof(saddr)) == -1) { perror_("! Connection failed !"); }
+    f_nonblock = fcntl(handle, F_GETFL, 0);
     printf("Welcome to our platform. Please login or register:\n1. Login\n2. Register\n# ");
     scanf("%d", &choice);
     switch (choice) {
@@ -106,8 +109,9 @@ void register_(int handle) {
 }
 void client_mode(int handle) {
     while (1) {
+        fcntl(handle, F_SETFL, f_nonblock);
         int choice = 0;
-        printf("1. Post new offer\n2. Exit\n#:");
+        printf("1. Post new offer\n2. Exit\n# ");
         scanf("%d", &choice);
         switch (choice) {
             case 1: {
@@ -131,11 +135,12 @@ void client_mode(int handle) {
                 send_(handle, &msg);
                 recv_(handle, &msg);
                 switch (msg.code) {
-                    case NEW_ACCEPTED || NEW_INPROGRESS:
-                        await_finalize();
+                    case NEW_ACCEPTED:
+                    case NEW_INPROGRESS:
+                        await_finalize(handle, eta);
                         break;
                     case NEW_DECLINED:
-                        printf("Offer not accapted. Try again");
+                        printf("Offer not accapted. Try again\n");
                         break;
                 }
                 break;
@@ -169,6 +174,38 @@ inline void perror_(const char *text) {
     printf("%s", text);
     exit(1);
 }
-void await_finalize() {
+void await_finalize(int connection, int eta) {
+    Message msg;
+    int n = 0;
+    system("clear");
+    fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
+    while(1) {
+        system("clear");
+        if (eta>=0) { printf("Offer successfully posted!\nExpires in %d\n", eta); } 
+        else { printf("Order expired. Awaiting server comfirmation...\n"); }
+        n = recv(connection, &msg, sizeof(Message), 0);
+        if (n > 0 && msg.code == OFFER_FINISHED) { 
+            system("clear");
+            printf("Supplier has completed your order. You may post a new order.\n");
+            sleep(3);
+            return;
+        }
+        if (n > 0 && msg.code ==  OFFER_TIMEOUT) {
+            system("clear");
+            printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
+            sleep(3);
+            return;
+        }
+        if ( ( n == -1 ) && ( eta + 4 < 0 ) ) {
+            printf("! No respond from the server !\n");
+            fflush(stdout);
+            sleep(2);
+            system("clear");
+            return;
+        }
+        fflush(stdout);
+        eta = eta-1;
+        sleep(1);
+    }
     return;
 }
