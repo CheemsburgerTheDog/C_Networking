@@ -17,6 +17,7 @@ void register_(int handle);
 void perror_(const char *text);
 void supplier_mode();
 void client_mode();
+void await_finalize();
 
 int main (int argc, char* argv[]) {
     run("127.0.0.1", 7030);
@@ -33,37 +34,20 @@ void login_(int handle) {
     printf("Podaj haslo: ");
     scanf("%s", passwd);
     printf("\n");
+    strcpy(username, login);
     sprintf(msg.message, "%s %s", login, passwd);
     send(handle, &msg, sizeof(Message), 0);
     recv_(handle, &msg);
     switch (msg.code) {
         case LOGIN_SUCCESFUL:
             if (strcmp("1", msg.message) == 0) {
-                client_mode();
+                client_mode(handle);
             } else { supplier_mode(); }
             break;
         case LOGIN_FAILED:
             perror_("Login failed");
     }
     close(handle);
-}
-void recv_(int handle, Message *msg){
-    if (recv(handle, msg, sizeof(Message), 0) == -1) {
-        perror_("! Connection lost !");
-        exit(1);
-    }
-}
-void send_(int handle, Message *msg){
-    if (send(handle, msg, sizeof(Message), 0) == -1) {
-        perror_("! Connection lost !");
-        exit(1);
-    }
-}
-
-inline void perror_(const char *text) {
-    if (handle > 1) { close(handle); }
-    printf("%s", text);
-    exit(1);
 }
 void run(char *ip, int port) {
     int choice = 0;
@@ -120,9 +104,71 @@ void register_(int handle) {
     }
 
 }
-void client_mode() {
-    return;
+void client_mode(int handle) {
+    while (1) {
+        int choice = 0;
+        printf("1. Post new offer\n2. Exit\n#:");
+        scanf("%d", &choice);
+        switch (choice) {
+            case 1: {
+                char resource[10];
+                int quanitity = 0;
+                int eta = 0;
+                Message msg;
+                system("clear");
+
+                printf("Enter resource: ");
+                scanf("%s", resource);
+                printf("\n");
+                printf("Enter quantity: ");
+                scanf("%d", &quanitity);
+                printf("\n");
+                printf("Enter ETA: ");
+                scanf("%d", &eta);
+
+                msg.code = NEW_OFFER;
+                sprintf(msg.message, "%s %d %s %d", username, eta, resource, quanitity);
+                send_(handle, &msg);
+                recv_(handle, &msg);
+                switch (msg.code) {
+                    case NEW_ACCEPTED || NEW_INPROGRESS:
+                        await_finalize();
+                        break;
+                    case NEW_DECLINED:
+                        printf("Offer not accapted. Try again");
+                        break;
+                }
+                break;
+            }
+            case 2: {
+                close(handle);
+                exit(1);
+                break;
+            }
+        }
+    }
 }
 void supplier_mode() {
+    return;
+}
+void recv_(int handle, Message *msg){
+    if (recv(handle, msg, sizeof(Message), 0) == -1) {
+        perror_("! Connection lost !");
+        exit(1);
+    }
+}
+void send_(int handle, Message *msg){
+    if (send(handle, msg, sizeof(Message), 0) == -1) {
+        perror_("! Connection lost !");
+        exit(1);
+    }
+}
+
+inline void perror_(const char *text) {
+    if (handle > 1) { close(handle); }
+    printf("%s", text);
+    exit(1);
+}
+void await_finalize() {
     return;
 }

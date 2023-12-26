@@ -11,16 +11,20 @@
 #include <poll.h>
 #include "logging.c"
 #include "s_network.c"
+#include "offer.c"
 #include "authentication.c"
 #include <pthread.h>
 #include <sys/epoll.h>
 
-static Server *s_tcp; 
-static User *s_users;
+static Server *g_tcp; 
+static User *g_users;
+static Offer *g_offers;
 static int *g_serverLoad;
-pthread_mutex_t m_poll, m_passwd, m_users;
+pthread_mutex_t m_offers, m_passwd, m_users;
 static pthread_t *t_threads;
-static pthread_t t_clock;                                      
+static pthread_t t_clock;
+static int g_offer_cap;       
+static int g_user_cap;                               
 
 int recv_(int, Message*);
 int send_(int, int, Message*);
@@ -28,37 +32,44 @@ void *worker(void*);
 void term_thread(const char*, int, int);
 void process_msg(int, int);
 //DONE Initialize ports, all data structures, run threads.
-int InitServer(char *ip, int tport, int tn, int threads, int total_capacity) {
+int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer_cap) {
 /////////Initializing local variables///////////
     int temp;
-    s_tcp = (Server*) malloc(sizeof(Server));
-    memset(s_tcp, 0, sizeof(Server));
-    s_users = (User*) malloc(sizeof(User)*total_capacity);
-    memset(s_users, 0, sizeof(User)*total_capacity);
+    g_offer_cap = offer_cap;
+    g_user_cap = user_cap;
+    g_tcp = (Server*) malloc(sizeof(Server));
+    memset(g_tcp, 0, sizeof(Server));
+    g_users = (User*) malloc(sizeof(User)*user_cap);
+    memset(g_users, 0, sizeof(User)*user_cap);
     g_serverLoad = (int*) malloc(sizeof(int)*threads);
     memset(g_serverLoad, 0, sizeof(int)*threads);
+    g_offers = (Offer*)malloc(sizeof(Offer)*offer_cap);
+    memset(g_offers, 0, sizeof(Offer)*offer_cap);
     t_threads = (pthread_t*) malloc(sizeof(pthread_t)*threads);
-    pthread_mutex_init(&m_poll, NULL);
+    pthread_mutex_init(&m_offers, NULL);
     pthread_mutex_init(&m_passwd, NULL);
     pthread_mutex_init(&m_users, NULL);
-    for (size_t i = 0; i < total_capacity; i++) {
-        s_users[i].len = sizeof(s_users->addr);
+    for (size_t i = 0; i < user_cap; i++) {
+        g_users[i].len = sizeof(g_users->addr);
+    }
+    for (size_t i = 0; i < offer_cap; i++) {
+        g_offers[i].phase = 2;
     }
     openlog("CHEEMS", LOG_PERROR, LOG_USER);
 
 ////////Preping server////////////////////////
-    s_tcp->max_cap = total_capacity;
-    s_tcp->addr.sin_family = AF_INET;
-    s_tcp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    s_tcp->addr.sin_port = htons(tport);
+    g_tcp->max_cap = user_cap;
+    g_tcp->addr.sin_family = AF_INET;
+    g_tcp->addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    g_tcp->addr.sin_port = htons(tport);
     temp = socket(AF_INET, SOCK_STREAM, 0);
-    s_tcp->handle = temp;
-    fcntl(s_tcp->handle, F_SETFL, fcntl(s_tcp->handle, F_GETFL, 0) | O_NONBLOCK);
-    bind (s_tcp->handle, (struct sockaddr *) & s_tcp->addr, sizeof(s_tcp->addr));
-    int buffs = sizeof(Message)*((int)total_capacity*1.3);
+    g_tcp->handle = temp;
+    fcntl(g_tcp->handle, F_SETFL, fcntl(g_tcp->handle, F_GETFL, 0) | O_NONBLOCK);
+    bind (g_tcp->handle, (struct sockaddr *) & g_tcp->addr, sizeof(g_tcp->addr));
+    int buffs = sizeof(Message)*((int)user_cap*1.3);
     buffs = buffs - (buffs%(sizeof(Message)));
-    setsockopt(s_tcp->handle, SOL_SOCKET, SO_RCVBUF, &buffs, sizeof(buffs));
-    if ( listen(s_tcp->handle, tn) == -1) { 
+    setsockopt(g_tcp->handle, SOL_SOCKET, SO_RCVBUF, &buffs, sizeof(buffs));
+    if ( listen(g_tcp->handle, tn) == -1) { 
         syslog(LOG_EMERG, "M %s", "Error at listening");
         exit(EXIT_FAILURE);
     }
@@ -66,11 +77,13 @@ int InitServer(char *ip, int tport, int tn, int threads, int total_capacity) {
 /////////////THREAD CREATION///////////////////////////
     Sclock *clock_conf;
     clock_conf = (Sclock*)malloc(sizeof(Sclock));
-    clock_conf->ptr = s_users;
-    clock_conf->size = total_capacity;
+    clock_conf->uptr = g_users;
+    clock_conf->u_size = user_cap;
+    clock_conf->optr = g_offers;
+    clock_conf->o_size = offer_cap;
     pthread_create(&t_clock, NULL, clock_, clock_conf);
-    int t_modulo  = total_capacity%threads;
-    int t_max_cap = (total_capacity-t_modulo)/threads;
+    int t_modulo  = user_cap%threads;
+    int t_max_cap = (user_cap-t_modulo)/threads;
     for (size_t i = 0; i < threads; i++) {
         Tinfo *conf;
         conf = (Tinfo*)malloc(sizeof(Tinfo));
@@ -90,7 +103,7 @@ int InitServer(char *ip, int tport, int tn, int threads, int total_capacity) {
 
 //DONE Worker thread for handling connections. 
 void *worker(void *arg) {
-    int lisneter = s_tcp->handle;
+    int lisneter = g_tcp->handle;
     struct sockaddr_in addr;
     socklen_t len;
     struct epoll_event ev, events[((Tinfo*)arg)->max];
@@ -99,15 +112,15 @@ void *worker(void *arg) {
     epollfd = epoll_create(((Tinfo*)arg)->max);
     if (epollfd == -1) { term_thread("EPOLL FAILED", LOG_ALERT, ((Tinfo*)arg)->id); }    
     ev.events = EPOLLIN;
-    ev.data.fd = s_tcp->handle;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, s_tcp->handle, &ev) == -1) { term_thread("EPOLL FAILED", LOG_ALERT, ((Tinfo*)arg)->id); }
+    ev.data.fd = g_tcp->handle;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, g_tcp->handle, &ev) == -1) { term_thread("EPOLL FAILED", LOG_ALERT, ((Tinfo*)arg)->id); }
     while (true) { // Posibble change: based on global value; SIGKILL changes the value tho false
         if (g_serverLoad[((Tinfo*)arg)->id] == ((Tinfo*)arg)->max) { continue; }
         nfds = epoll_wait(epollfd, events, ((Tinfo*)arg)->max, -1);
         if (nfds == -1) { term_thread("EPOLL FAILED", LOG_ALERT, ((Tinfo*)arg)->id); }
         for (int n = 0; n < nfds; ++n) {
-            if (events[n].data.fd == s_tcp->handle) { //Accept connections
-                connection = accept(s_tcp->handle, (struct sockaddr *) &addr, &len);
+            if (events[n].data.fd == g_tcp->handle) { //Accept connections
+                connection = accept(g_tcp->handle, (struct sockaddr *) &addr, &len);
                 if (connection == -1) { 
                     continue;
                 } else { g_serverLoad[((Tinfo*)arg)->id]  = g_serverLoad[((Tinfo*)arg)->id]+1; }
@@ -137,13 +150,13 @@ void process_msg(int connection, int thread_id) {
             register_(connection, &msg);
             break;
         case LOGIN:
-            login(connection, &msg, thread_id, &m_users, s_users);
+            login(connection, &msg, thread_id, &m_users, g_users);
             break;
         case NEW_OFFER:
-            receive_new();
+            receive_new(connection, &msg, g_offers, g_offer_cap, g_users, g_user_cap, &m_offers);
             break;
-        case ACCEPT_OFFER:
-            elect_supplier(connection, &msg, &m_users, s_users, &m_offers, s_offer);
+        // case ACCEPT_OFFER:
+        //     elect_supplier(connection, &msg, &m_users, g_users, &m_offers, s_offer);
         default:
             break;
     }
@@ -160,8 +173,8 @@ inline int recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
         int i = 0;
         while (1) {
-            if (s_users[i].handle == handle) {
-                s_users[i].active = false;
+            if (g_users[i].handle == handle) {
+                g_users[i].active = false;
                 close(handle);
                 return -1;
             } 
@@ -180,7 +193,7 @@ inline int send_(int handle, int code, Message *msg){
     if (send(handle, msg, sizeof(Message), 0) == -1) {
         int i = 0;
         while (1) {
-            if (s_users[i].handle == handle) {
+            if (g_users[i].handle == handle) {
                 close(handle);
                 if (clear == 1) { free(msg); }
                 return -1;

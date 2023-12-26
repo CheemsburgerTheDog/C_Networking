@@ -27,10 +27,10 @@
 #define NEW_OFFER 31
 #define NEW_ACCEPTED 32
 #define NEW_DECLINED 33
+#define NEW_INPROGRESS 37
 #define ACCEPT_OFFER 34
 #define ACCEPT_ACCEPT 35
 #define ACCEPT_DECLINE 36
-#define INPROGRESS 37
 
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
@@ -68,11 +68,6 @@ typedef struct message {
     char message[MSG_LEN];
 } Message;
 
-typedef struct sclock {
-    int size;
-    User *ptr;
-} Sclock;
-
 typedef struct offer {
     //0 -> open
     //1 -> in progrress
@@ -86,4 +81,12 @@ typedef struct offer {
     char resource[20];
     int quantity;
 } Offer;
+
+typedef struct sclock {
+    int u_size;
+    User *uptr;
+    int o_size;
+    Offer *optr;
+} Sclock;
+
 #endif

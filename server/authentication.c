@@ -14,7 +14,6 @@
 #define BUFF_SIZE 30
 #define CRED_SIZE 10
 #include<pthread.h>
-static User *l_users;
 
 typedef struct {
     char login[CRED_SIZE];
@@ -30,6 +29,8 @@ typedef struct {
 static Passwd *passwd;
 
 void *clock_(void*);
+void inform_expired();
+
 
 //DONE Initializes passwd file at path.
 void InitPasswd(char path[]) {
@@ -67,14 +68,16 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
                 while (1) { //LOWER-LEVEL GUARANTEE OF FREE SPACE THOU ERROR PRONE
                     if ( s_users[i].active == false) {
                         s_users[i].active = true;
+                        pthread_mutex_unlock(m_users);
                         s_users[i].busy = false;
                         s_users[i].handle = connection;
                         s_users[i].published = 0;
                         // s_users[i].session_id = session_id;
                         s_users[i].timeout = 300; //Seconds
                         s_users[i].type = credentials.type;
-                        pthread_mutex_unlock(m_users);
-                        send_(connection, LOGIN_SUCCESFUL, NULL);
+                        Message msg;
+                        sprintf(msg.message, "%d", credentials.type);
+                        send_(connection, LOGIN_SUCCESFUL, &msg);
                         return 0;
                     }
                     i = i+1;
@@ -124,39 +127,50 @@ int register_(int connection, Message *msg) {
     return 0;
 }
 //VIP 
-void *clock_(void *str) { 
-    int t_size = ((Sclock*)str)->size;
-    l_users = ((Sclock*)str)->ptr;
+void *clock_(void *str) {    
     while(1) {
         sleep(1);
-        for (size_t i = 0; i < t_size; i++) {
-            if (l_users[i].active == true) {
-                l_users[i].timeout = l_users[i].timeout - 1;
-                printf("%d\n",l_users[i].timeout);
+        system("clear");
+        for (size_t i = 0; i < ((Sclock*)str)->u_size; i++) {
+            if (((Sclock*)str)->uptr[i].active == true) {
+                ((Sclock*)str)->uptr[i].timeout = ((Sclock*)str)->uptr[i].timeout - 1;
+            }
+        }
+        for (size_t i = 0; i < ((Sclock*)str)->o_size; i++) {
+            if (((Sclock*)str)->optr[i].phase != 0 ) { continue; }
+            ((Sclock*)str)->optr[i].eta = ((Sclock*)str)->optr[i].eta - 1;
+            if (((Sclock*)str)->optr[i].eta < 0) {
+                ((Sclock*)str)->optr[i].phase = 2;
+                inform_expired();
+            } else {
+                printf("%d %s\n",((Sclock*)str)->optr[i].eta, ((Sclock*)str)->optr[i].resource);
             }
         }
         fflush(stdout);
     }
 }
-
-int _gen_session_id() {
-    bool avaiable = true;
-    pthread_mutex_lock(&m_users);
-    while (1) {
-        avaiable = true;
-        int c_session_id = rand()%1000000;
-        for (int i = 0; i<g_total_capacity; i++) {
-            if ( users[i].session_id ==  c_session_id) {
-                avaiable = false; 
-                break; 
-            }
-        }
-        if (avaiable == true) { 
-            pthread_mutex_unlock(&m_users);
-            return c_session_id; 
-        }
-    }
+void inform_expired(){
+    return;
 }
+
+// int _gen_session_id() {
+//     bool avaiable = true;
+//     pthread_mutex_lock(&m_users);
+//     while (1) {
+//         avaiable = true;
+//         int c_session_id = rand()%1000000;
+//         for (int i = 0; i<g_total_capacity; i++) {
+//             if ( users[i].session_id ==  c_session_id) {
+//                 avaiable = false; 
+//                 break; 
+//             }
+//         }
+//         if (avaiable == true) { 
+//             pthread_mutex_unlock(&m_users);
+//             return c_session_id; 
+//         }
+//     }
+// }
 //Send status-only message. Used only for clarity;
 
 
