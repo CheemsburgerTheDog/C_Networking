@@ -7,15 +7,30 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <strings.h>
+#include <sys/epoll.h>
 #include "/home/cheemsburger/Desktop/C_Networking/server/s_network.c"
+#define MAXLIST 5
+
+typedef struct offer_sup {
+    int active;
+    int id;
+    char name[10];
+    char resource[10];
+    int quanitity;
+    int eta;
+} Offer_out;
+
+int elected = 0;
+int clock_print = 1;
+static Offer_out* offers;
 static int handle;
 static char *username;
 static int f_nonblock = 0;
 // "127.0.0.1 7777 UDP"
 void run(char *ip, int port);
 void recv_(int handle, Message *msg);
-void login_(int handle);
-void register_(int handle);
+void login_();
+void register_();
 void perror_(const char *text);
 void supplier_mode();
 void client_mode();
@@ -24,7 +39,7 @@ void await_finalize();
 int main (int argc, char* argv[]) {
     run("127.0.0.1", 7030);
 }
-void login_(int handle) {
+void login_() {
     Message msg;
     msg.code = LOGIN;
     char login[10];
@@ -67,10 +82,10 @@ void run(char *ip, int port) {
     scanf("%d", &choice);
     switch (choice) {
         case 1:
-            login_(handle);
+            login_();
             break;
         case 2:
-            register_(handle);
+            register_();
             break;
         default:
             perror_("Wrong option");
@@ -78,7 +93,7 @@ void run(char *ip, int port) {
     }
     close(handle);
 }
-void register_(int handle) {
+void register_() {
     Message msg;
     msg.code = REGISTER;
     char login[10];
@@ -136,8 +151,9 @@ void client_mode(int handle) {
                 recv_(handle, &msg);
                 switch (msg.code) {
                     case NEW_ACCEPTED:
-                    case NEW_INPROGRESS:
                         await_finalize(handle, eta);
+                    case NEW_INPROGRESS:
+                        inprogress();
                         break;
                     case NEW_DECLINED:
                         printf("Offer not accapted. Try again\n");
@@ -154,7 +170,94 @@ void client_mode(int handle) {
     }
 }
 void supplier_mode() {
+    offers = (Offer_out*) malloc(sizeof(Offer_out)*MAXLIST);
+    memset(offers, 0, sizeof(Offer_out)*MAXLIST);
+    int epollfd, nfds;
+    struct epoll_event ev, events[2];
+    epollfd = epoll_create(2);
+    if (epollfd == 1) { perror_("EPOLL FAILURE"); }
+    ev.events = EPOLLIN;
+    ev.data.fd = 0;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, 0, &ev) == -1) { perror_("EPOLL_CTL ERROR"); }
+    ev.data.fd = handle;
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, handle, &ev) == -1) { perror_("EPOLL_CTL ERROR"); }
+    while(1) {
+        nfds = epoll_wait(epollfd, events, 2, -1);
+        if (nfds == -1) { perror_("EPOLL ERROR"); }
+        for ( int n = 0; n<2;n++ ) {
+            if (events[n].data.fd == 0) {
+                char input[2];
+                read(0, input, 1);
+                input[2] = '\0';
+                switch (atoi(input)) {
+                    case 1:
+                        prepare_offer();
+                        break;    
+                    case 2:
+                        close(handle);
+                        exit(0);
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                process_msg();
+            }
+            
+            
+        }
+
+    }
     return;
+}
+void prepare_offer() {
+    Message msg;
+    int id, eta;
+    clock_print = 0;
+    system("clear");
+    printf("Enter offer ID: ");
+    scanf("%d", &id);
+    printf("\n");
+    printf("Enter ETA to complete: ");
+    scanf("%d", &eta);
+    printf("\n");
+    msg.code = ACCEPT_OFFER;
+    sprintf(msg.message, "%d %d");
+    send_(handle, &msg);
+    while (1) {
+        if (elected == 1) {
+            /* code */
+        }
+        
+    }
+    
+}
+
+void *clock() {
+    while(1) {
+        sleep(1);
+        if ( clock_print == 1 ) {
+            system("clear");
+            printf("1. Accept offer\n2.Exit\n\n");
+        }
+        for (size_t i = 0; i < MAXLIST; i++) {
+            if ( offers[i].active == 0 ){ continue; }
+            if ( clock_print == 1 ) {
+                printf("%d %d %s %s %d\n",
+                offers[i].id,
+                offers[i].eta,
+                offers[i].name,
+                offers[i].resource,
+                offers[i].quanitity
+                );
+            }
+            offers[i].eta =  offers[i].eta-1;    
+            if ( offers[i].eta < 0 ) { offers[i].active = 0; }
+        }
+    }
+}
+void process_msg() {
+    
 }
 void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
