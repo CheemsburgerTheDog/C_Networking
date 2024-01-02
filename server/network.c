@@ -155,12 +155,30 @@ void process_msg(int connection, int thread_id) {
         case NEW_OFFER:
             receive_new(connection, &msg, g_offers, g_offer_cap, g_users, g_user_cap, &m_offers);
             break;
-        // case ACCEPT_OFFER:
-        //     elect_supplier(connection, &msg, &m_users, g_users, &m_offers, s_offer);
+        case ACCEPT_OFFER:
+            elect_supplier(connection, &msg);
+            break;
         default:
             break;
     }
       
+}
+void elect_supplier(int connection, Message *msg, Offer *o_list, int on) {
+    int id, eta;
+    sscanf(msg->message, "%d %d", &id, &eta);
+    for (size_t i = 0; i < on; i++) {
+        if ( o_list[i].phase == 2 ) { continue; }
+        if ( o_list[i].id == id && o_list[i].lowSup_eta <= eta ) {
+            Message temp_msg;
+            sprintf(temp_msg.message,"%d %d %D", &o_list[i].id, &o_list[i].lowSup_eta, &id);
+            send_(connection, BID_ETA, &temp_msg);
+            return;
+        } else {
+            //OFFERLIST ZEROED SET IT MAX VALUE ETC. 100000
+            o_list[i].lowSup_eta = eta;
+            o_list[i].sup_handle = connection;
+        }
+    }
 }
 //DONE Inline function for syslog() & pthread_exit()
 inline void term_thread(const char *err, int type, int id) {

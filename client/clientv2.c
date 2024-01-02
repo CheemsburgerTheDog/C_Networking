@@ -12,7 +12,7 @@
 #define MAXLIST 5
 
 typedef struct offer_sup {
-    int active;
+    int state; // 0 free 1 vip 2 occupied
     int id;
     char name[10];
     char resource[10];
@@ -20,6 +20,13 @@ typedef struct offer_sup {
     int eta;
 } Offer_out;
 
+typedef struct input_state {
+    int state;
+    int id;
+    int eta;
+} InputState;
+
+InputState inputState;
 int elected = 0;
 int clock_print = 1;
 static Offer_out* offers;
@@ -35,6 +42,7 @@ void perror_(const char *text);
 void supplier_mode();
 void client_mode();
 void await_finalize();
+void process_input();
 
 int main (int argc, char* argv[]) {
     run("127.0.0.1", 7030);
@@ -122,7 +130,7 @@ void register_() {
     }
 
 }
-void client_mode(int handle) {
+void client_mode() {
     while (1) {
         fcntl(handle, F_SETFL, f_nonblock);
         int choice = 0;
@@ -152,9 +160,6 @@ void client_mode(int handle) {
                 switch (msg.code) {
                     case NEW_ACCEPTED:
                         await_finalize(handle, eta);
-                    case NEW_INPROGRESS:
-                        inprogress();
-                        break;
                     case NEW_DECLINED:
                         printf("Offer not accapted. Try again\n");
                         break;
@@ -185,54 +190,136 @@ void supplier_mode() {
         nfds = epoll_wait(epollfd, events, 2, -1);
         if (nfds == -1) { perror_("EPOLL ERROR"); }
         for ( int n = 0; n<2;n++ ) {
-            if (events[n].data.fd == 0) {
-                char input[2];
-                read(0, input, 1);
-                input[2] = '\0';
-                switch (atoi(input)) {
-                    case 1:
-                        prepare_offer();
-                        break;    
-                    case 2:
-                        close(handle);
-                        exit(0);
-                        break;
-                    default:
-                        break;
-                }
-            } else {
-                process_msg();
-            }
-            
-            
+            if (events[n].data.fd == 0) { process_input(); } 
+            else { process_msg(); }
         }
-
     }
     return;
 }
-void prepare_offer() {
+void process_msg() {
     Message msg;
-    int id, eta;
-    clock_print = 0;
-    system("clear");
-    printf("Enter offer ID: ");
-    scanf("%d", &id);
-    printf("\n");
-    printf("Enter ETA to complete: ");
-    scanf("%d", &eta);
-    printf("\n");
-    msg.code = ACCEPT_OFFER;
-    sprintf(msg.message, "%d %d");
-    send_(handle, &msg);
-    while (1) {
-        if (elected == 1) {
-            /* code */
+    recv_(handle, &msg);
+    switch (msg.code) {
+        case USER_TIMEOUT: {
+            clock_print = 0;
+            system("clear");
+            printf("You have been disconnected from the server due to inactivity.");
+            close(handle);
+            exit(0);
+            break;
         }
-        
+        case NEW_OFFER: {
+            for (size_t i = 0; i < MAXLIST; i++) {
+                if (offers[i].state == 0) {
+                    offers[i].state = 1;
+                    sscanf(msg.message, "%d %s %s %d %d", 
+                        &offers[i].id,
+                        offers[i].name,
+                        offers[i].resource,
+                        &offers[i].quanitity,
+                        &offers[i].eta);
+                    offers[i].state = 2;
+                }
+            }
+            break;
+        }
+        case INPROGRESS: {
+            system("clear");
+            printf("You have applied for an offer.\nYour account is locked until order completes.\n");
+            sleep(1);
+            sscanf(msg.message, "%d", &inputState.eta);
+            inputState.state = 4;
+        }
+        case BID_ETA: {
+            system("clear");
+            int id, uETA, tETA;
+            sscanf(msg.message, "%d %d %d", &id, &uETA, &tETA);
+            printf("Offer %d denied. Better offer was proposed.\nYour ETA: %d\nCurrent lowest server ETA:%d\n", id, uETA, tETA);
+            inputState.state = 0;
+        } 
+        case ACCEPT_ACCEPT: {
+            system("clear");
+            printf("You have been chosen as the supplier for applied offer.\nYour account is locked until order completes\n");
+            inputState.state = 4;
+        }
+        case ACCEPT_DECLINE:{
+            system("clear");
+            printf("You have NOT been chosen as the supplier for applied offer.\nYou may apply for another offer\n");
+            inputState.state = 0;
+        }
+        default:
+            break;
     }
-    
 }
-
+void process_input() {
+    int b = 0;
+    char buffer[10];
+    switch (inputState.state) { 
+        case 0: {
+            read(0, buffer, 1);
+            buffer[2] = '\0';
+            system("clear");
+            if ( strcmp(buffer, "1") == 0 ) {
+                printf("\nEnter offer ID: ");
+                inputState.state = 1;
+                clock_print = 0;
+                return;
+            }
+            if (strcmp(buffer, "2") == 0) {
+                close(handle);
+                exit(0);
+            }
+            printf("\nWrong option. Try again.");
+            while (read(0, buffer, 10) > 0) { continue; }
+            break;
+        }
+        case 1: {
+            b = read(0, buffer, 9);
+            buffer[b] = '\0';
+            int temp;
+            if (temp = atoi(buffer) == 0) {
+                while (read(0, buffer, 10) > 0) { continue; }
+                printf("\nIncorrect ID. Try again.");
+                return;
+            }
+            inputState.id = temp;
+            inputState.state = 2;
+            printf("\nEnter ETA: ");
+            while (read(0, buffer, 10) > 0) { continue; }
+            break;
+        }
+        case 2:{
+            b = read(0, buffer, 9);
+            buffer[b] = '\0';
+            int temp;
+            if (temp = atoi(buffer) == 0) {
+                while (read(0, buffer, 10) > 0) { continue; }
+                printf("\nIncorrect ETA. Try again.");
+                return;
+            }
+            inputState.eta = temp;
+            Message msg;
+            msg.code = ACCEPT_OFFER;
+            sprintf(msg.message, "%d %d", &inputState.id, &inputState.eta);
+            send_(handle, &msg);
+            inputState.state = 3;
+            while (read(0, buffer, 10) > 0) { continue; }
+            break;
+        }
+        case 3: {
+            while (read(0, buffer, 10) > 0) { continue; }
+            system("clear");
+            printf("Awaiting server respond. Please stand by...");
+            break;
+        }
+        case 4: {
+            while (read(0, buffer, 10) > 0) { continue; }
+            system("clear");
+            printf("Server deems you busy. Server ETA: %d\n", inputState.eta);
+            break;
+        }   
+    }
+}
 void *clock() {
     while(1) {
         sleep(1);
@@ -241,7 +328,7 @@ void *clock() {
             printf("1. Accept offer\n2.Exit\n\n");
         }
         for (size_t i = 0; i < MAXLIST; i++) {
-            if ( offers[i].active == 0 ){ continue; }
+            if ( offers[i].state == 0 ){ continue; }
             if ( clock_print == 1 ) {
                 printf("%d %d %s %s %d\n",
                 offers[i].id,
@@ -252,19 +339,18 @@ void *clock() {
                 );
             }
             offers[i].eta =  offers[i].eta-1;    
-            if ( offers[i].eta < 0 ) { offers[i].active = 0; }
+            if ( offers[i].eta < 0 ) { offers[i].state = 0; }
         }
     }
 }
-void process_msg() {
-    
-}
+
 void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
         perror_("! Connection lost !");
         exit(1);
     }
 }
+
 void send_(int handle, Message *msg){
     if (send(handle, msg, sizeof(Message), 0) == -1) {
         perror_("! Connection lost !");
@@ -277,29 +363,43 @@ inline void perror_(const char *text) {
     printf("%s", text);
     exit(1);
 }
-void await_finalize(int connection, int eta) {
+void await_finalize( int connection, int eta ) {
     Message msg;
+    char name[10];
+    int begin = 0 ;
     int n = 0;
     system("clear");
     fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
     while(1) {
         system("clear");
-        if (eta>=0) { printf("Offer successfully posted!\nExpires in %d\n", eta); } 
+        if (eta>=0 && begin == 0 ) { printf("Offer successfully posted!\nExpires in %d\n", eta + 8); } 
         else { printf("Order expired. Awaiting server comfirmation...\n"); }
         n = recv(connection, &msg, sizeof(Message), 0);
+        //////////////////
+        if ( n > 0 && msg.code == TRANSACTION_STARTED ) {
+            sscanf(msg.message, "%s %d", name, &eta);
+            begin = 1; 
+        }
+        if ( begin == 1 ) {
+            system("clear");
+            printf("Supplier %s with the best ETA has been chosen. Estimated time: %d\n", name, eta);
+        }
+        /////////////////////
         if (n > 0 && msg.code == OFFER_FINISHED) { 
             system("clear");
             printf("Supplier has completed your order. You may post a new order.\n");
             sleep(3);
             return;
         }
+        //////////////////////
         if (n > 0 && msg.code ==  OFFER_TIMEOUT) {
             system("clear");
             printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
             sleep(3);
             return;
         }
-        if ( ( n == -1 ) && ( eta + 4 < 0 ) ) {
+        //////////////
+        if ( ( n == -1 ) && ( eta + 8 < 0 ) ) {
             printf("! No respond from the server !\n");
             fflush(stdout);
             sleep(2);

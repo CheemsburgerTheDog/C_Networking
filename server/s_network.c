@@ -31,7 +31,10 @@
 #define ACCEPT_OFFER 34
 #define ACCEPT_ACCEPT 35
 #define ACCEPT_DECLINE 36
+#define TRANSACTION_STARTED 39
 #define OFFER_FINISHED 38
+#define INPROGRESS 40
+#define BID_ETA 41
 
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
@@ -77,7 +80,8 @@ typedef struct offer {
     int cli_handle;
     int sup_handle;
     int id;
-    int eta;
+    int active_eta;
+    int lowSup_eta;
     char client_name[10];
     char resource[20];
     int quantity;

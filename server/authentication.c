@@ -138,10 +138,16 @@ void *clock_(void *str) {
         }
         for (size_t i = 0; i < ((Sclock*)str)->o_size; i++) {
             if (((Sclock*)str)->optr[i].phase != 0 ) { continue; }
-            ((Sclock*)str)->optr[i].eta = ((Sclock*)str)->optr[i].eta - 1;
-            if (((Sclock*)str)->optr[i].eta < 0) {
-                ((Sclock*)str)->optr[i].phase = 2;
-                send_(((Sclock*)str)->optr[i].cli_handle, OFFER_TIMEOUT, NULL);
+            ((Sclock*)str)->optr[i].active_eta = ((Sclock*)str)->optr[i].active_eta - 1;
+            if (((Sclock*)str)->optr[i].active_eta < 0) {
+                if ( ((Sclock*)str)->optr[i].lowSup_eta == 100000) {
+                    ((Sclock*)str)->optr[i].phase = 2;
+                    send_(((Sclock*)str)->optr[i].cli_handle, OFFER_TIMEOUT, NULL);
+                } else {
+                    Message msg;
+                    sprintf(msg.message, "%d", &(((Sclock*)str)->optr[i].id));
+                    send_( (((Sclock*)str)->optr[i].sup_handle), TRANSACTION_STARTED, &msg );
+                }
                 int j = 0;
                 while (1) {
                     if ( ((Sclock*)str)->optr[i].cli_handle == ((Sclock*)str)->uptr[j].handle ) {
@@ -153,7 +159,7 @@ void *clock_(void *str) {
                 //ID  ETA NAME RESOURCE QUA
                 printf("%d %d %s %s %d\n",
                 ((Sclock*)str)->optr[i].id,
-                ((Sclock*)str)->optr[i].eta,
+                ((Sclock*)str)->optr[i].active_eta,
                 ((Sclock*)str)->optr[i].client_name,
                 ((Sclock*)str)->optr[i].resource,
                 ((Sclock*)str)->optr[i].quantity);
