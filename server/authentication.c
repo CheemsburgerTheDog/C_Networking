@@ -13,7 +13,7 @@
 #include  "s_network.c"
 #define BUFF_SIZE 30
 #define CRED_SIZE 10
-#include<pthread.h>
+#include <pthread.h>
 
 typedef struct {
     char login[CRED_SIZE];
@@ -41,16 +41,11 @@ void InitPasswd(char path[]) {
 }
 
 //DONE Login user by adding him to the users array. 
-int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users, User *s_users) {
+int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users, User *s_users, int uo) {
     Credentials credentials;
     char line_buff[BUFF_SIZE];
     char *token;
-
-    token = strtok(msg->message, " ");
-    strcpy(credentials.login, token);
-    token = strtok(NULL, " ");
-    strcpy(credentials.password, token);
-
+    sscanf(msg->message, "%s %s", credentials.login, credentials.password);
     pthread_mutex_lock(&(passwd->mutex));
     rewind(passwd->file);
     while (fgets(line_buff, BUFF_SIZE, passwd->file)!=NULL) {
@@ -62,17 +57,17 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
                 credentials.type = atoi(token);
                 pthread_mutex_unlock(&(passwd->mutex));
                 ///////////////INSERTING USER////////////////
-                bool done = true;
                 pthread_mutex_lock(m_users);
-                int i = 0;
-                while (1) { //LOWER-LEVEL GUARANTEE OF FREE SPACE THOU ERROR PRONE
-                    if ( s_users[i].active == false) {
-                        s_users[i].active = true;
+                for (size_t i = 0; i < uo; i++) {
+                    if ( s_users[i].active == 0) {
+                        s_users[i].active = 1;
                         pthread_mutex_unlock(m_users);
-                        s_users[i].busy = false;
+                        s_users[i].addr = ;///;
+                        s_users[i].len = ;///;
+                        s_users[i].tid = thread_id;
+                        strcpy(s_users[i].name, credentials.login);
+                        s_users[i].busy = 0;
                         s_users[i].handle = connection;
-                        s_users[i].published = 0;
-                        // s_users[i].session_id = session_id;
                         s_users[i].timeout = 300; //Seconds
                         s_users[i].type = credentials.type;
                         Message msg;
@@ -80,7 +75,6 @@ int login(int connection, Message *msg, int thread_id, pthread_mutex_t *m_users,
                         send_(connection, LOGIN_SUCCESFUL, &msg);
                         return 0;
                     }
-                    i = i+1;
                 }
                 ///////////// END OF INSERTING ///////////////
             }             
@@ -126,7 +120,11 @@ int register_(int connection, Message *msg) {
     close(connection);
     return 0;
 }
-//VIP 
+/* Thread-only clock function . Every one or so seconds it performs all time based operations on the ETAs. 
+    Returns a message:
+        BID_DECLINE with "{id}{lowETA}{supETA}" on failure
+        BID_ACCEPT wtih "{id}" on successful election 
+*/
 void *clock_(void *str) {    
     while(1) {
         sleep(1);
@@ -137,32 +135,30 @@ void *clock_(void *str) {
             }
         }
         for (size_t i = 0; i < ((Sclock*)str)->o_size; i++) {
-            if (((Sclock*)str)->optr[i].phase != 0 ) { continue; }
+            if (((Sclock*)str)->optr[i].phase == 0 ) { continue; }
             ((Sclock*)str)->optr[i].active_eta = ((Sclock*)str)->optr[i].active_eta - 1;
             if (((Sclock*)str)->optr[i].active_eta < 0) {
                 if ( ((Sclock*)str)->optr[i].lowSup_eta == 100000) {
-                    ((Sclock*)str)->optr[i].phase = 2;
+                    ((Sclock*)str)->optr[i].phase = 0;
                     send_(((Sclock*)str)->optr[i].cli_handle, OFFER_TIMEOUT, NULL);
                 } else {
                     Message msg;
-                    sprintf(msg.message, "%d", &(((Sclock*)str)->optr[i].id));
+                    sprintf(msg.message, "%d", (((Sclock*)str)->optr[i].id));
                     send_( (((Sclock*)str)->optr[i].sup_handle), TRANSACTION_STARTED, &msg );
                 }
-                int j = 0;
-                while (1) {
-                    if ( ((Sclock*)str)->optr[i].cli_handle == ((Sclock*)str)->uptr[j].handle ) {
-                        ((Sclock*)str)->uptr[j].busy = false; 
-                    }
-                    j = j+1;
+                for (size_t j = 0; j < ((Sclock*)str)->o_size; j++) {
+                    if ( ((Sclock*)str)->optr[i].cli_handle == ((Sclock*)str)->uptr[j].handle ) { ((Sclock*)str)->uptr[j].busy = false; }
                 }
             } else {
-                //ID  ETA NAME RESOURCE QUA
-                printf("%d %d %s %s %d\n",
+                //ID  ETA NAME RESOURCE QUA LOWETA
+                printf("%d %d %s %s %d %d\n",
                 ((Sclock*)str)->optr[i].id,
                 ((Sclock*)str)->optr[i].active_eta,
                 ((Sclock*)str)->optr[i].client_name,
                 ((Sclock*)str)->optr[i].resource,
-                ((Sclock*)str)->optr[i].quantity);
+                ((Sclock*)str)->optr[i].quantity,
+                ((Sclock*)str)->optr[i].lowSup_eta
+                );
             }
         }
         fflush(stdout);

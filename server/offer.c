@@ -1,5 +1,6 @@
 #ifndef OFFER
 #define OFFER
+#include <pthread.h>
 #include "s_network.c"
 #include "network.c" 
 int g_offer_id = 1;
@@ -11,12 +12,12 @@ void _gen_offer_id();
 void receive_new(int connection, Message *msg, Offer *olist, int no, User *ulist, int nu, pthread_mutex_t *offer_mut) {
     pthread_mutex_lock(offer_mut);
     for (size_t i = 0; i < no; i++) {
-        if (olist[i].phase == 2 ) {
+        if (olist[i].phase == 0 ) {
             if (send_(connection, NEW_ACCEPTED, NULL) == -1) { 
                 pthread_mutex_unlock(offer_mut);
                 return; 
             }
-            olist[i].phase = 0;
+            olist[i].phase = 1;
             int max = 0;
             for (size_t d = 0; d < no; d++) {
                 if (max <= olist[d].id) { max = olist[d].id; }
@@ -24,7 +25,7 @@ void receive_new(int connection, Message *msg, Offer *olist, int no, User *ulist
             olist[i].id = max+1;
             pthread_mutex_unlock(offer_mut);
             //PESPO 3500 DREWNO 15
-            sscanf(msg->message,"%s %d %s %d", olist[i].client_name, &olist[i].eta, olist[i].resource, &olist[i].quantity);
+            sscanf(msg->message,"%d %s %d %s %d", &olist[i].id, olist[i].client_name, &olist[i].active_eta, olist[i].resource, &olist[i].quantity);
             olist[i].cli_handle = connection;
             for (size_t i = 0; i < nu; i++) {
                 if (ulist[i].handle == connection) {

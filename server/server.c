@@ -2,8 +2,8 @@
 #include "s_network.c"
 #define CLIENTS_SIZE 5
 #define PORT 7030
-#define THREADS 2
-#define USER_CAP 10
+#define THREADS 1
+#define USER_CAP 5
 #define OFFER_CAP 5
 
 int main() {

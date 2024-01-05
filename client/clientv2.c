@@ -34,15 +34,17 @@ static int handle;
 static char *username;
 static int f_nonblock = 0;
 // "127.0.0.1 7777 UDP"
-void run(char *ip, int port);
-void recv_(int handle, Message *msg);
+void run(char *, int );
+void recv_(int handle, Message *);
+void send_(int, Message*);
 void login_();
 void register_();
-void perror_(const char *text);
+void perror_(const char *);
 void supplier_mode();
 void client_mode();
-void await_finalize();
+void await_finalize(int, int);
 void process_input();
+void process_msg();
 
 int main (int argc, char* argv[]) {
     run("127.0.0.1", 7030);
@@ -118,7 +120,7 @@ void register_() {
     scanf("%d", &type);
     printf("\n");
     sprintf(msg.message, "%s %s %d", login, passwd, type);
-    send(handle, &msg, sizeof(Message), 0);
+    send_(handle, &msg);
     recv_(handle, &msg);
     switch (msg.code) {
         case REGISTER_SUCCESFUL:
@@ -212,12 +214,12 @@ void process_msg() {
             for (size_t i = 0; i < MAXLIST; i++) {
                 if (offers[i].state == 0) {
                     offers[i].state = 1;
-                    sscanf(msg.message, "%d %s %s %d %d", 
+                    sscanf(msg.message, "%d %s %d %s %d", 
                         &offers[i].id,
                         offers[i].name,
+                        &offers[i].eta,
                         offers[i].resource,
-                        &offers[i].quanitity,
-                        &offers[i].eta);
+                        &offers[i].quanitity);
                     offers[i].state = 2;
                 }
             }
@@ -229,23 +231,21 @@ void process_msg() {
             sleep(1);
             sscanf(msg.message, "%d", &inputState.eta);
             inputState.state = 4;
+            break;
         }
-        case BID_ETA: {
+        case BID_DECLINE: {
             system("clear");
             int id, uETA, tETA;
-            sscanf(msg.message, "%d %d %d", &id, &uETA, &tETA);
+            sscanf(msg.message, "%d %d %d", &id, &tETA, &uETA);
             printf("Offer %d denied. Better offer was proposed.\nYour ETA: %d\nCurrent lowest server ETA:%d\n", id, uETA, tETA);
             inputState.state = 0;
+            break;
         } 
-        case ACCEPT_ACCEPT: {
+        case BID_ACCEPT: {
             system("clear");
-            printf("You have been chosen as the supplier for applied offer.\nYour account is locked until order completes\n");
+            printf("Offer accepted. Your offer is currently the best\n");
             inputState.state = 4;
-        }
-        case ACCEPT_DECLINE:{
-            system("clear");
-            printf("You have NOT been chosen as the supplier for applied offer.\nYou may apply for another offer\n");
-            inputState.state = 0;
+            break;
         }
         default:
             break;
@@ -300,7 +300,7 @@ void process_input() {
             inputState.eta = temp;
             Message msg;
             msg.code = ACCEPT_OFFER;
-            sprintf(msg.message, "%d %d", &inputState.id, &inputState.eta);
+            sprintf(msg.message, "%d %d", inputState.id, inputState.eta);
             send_(handle, &msg);
             inputState.state = 3;
             while (read(0, buffer, 10) > 0) { continue; }
@@ -346,14 +346,14 @@ void *clock() {
 
 void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
-        perror_("! Connection lost !");
+        perror_("\n! Connection lost !\n");
         exit(1);
     }
 }
 
 void send_(int handle, Message *msg){
     if (send(handle, msg, sizeof(Message), 0) == -1) {
-        perror_("! Connection lost !");
+        perror_("\n! Connection lost !\n");
         exit(1);
     }
 }
@@ -389,14 +389,12 @@ void await_finalize( int connection, int eta ) {
             system("clear");
             printf("Supplier has completed your order. You may post a new order.\n");
             sleep(3);
-            return;
         }
         //////////////////////
         if (n > 0 && msg.code ==  OFFER_TIMEOUT) {
             system("clear");
             printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
             sleep(3);
-            return;
         }
         //////////////
         if ( ( n == -1 ) && ( eta + 8 < 0 ) ) {

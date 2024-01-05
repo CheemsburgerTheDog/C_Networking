@@ -31,6 +31,7 @@ int send_(int, int, Message*);
 void *worker(void*);
 void term_thread(const char*, int, int);
 void process_msg(int, int);
+void elect_supplier(int, Message*, Offer*, int);
 //DONE Initialize ports, all data structures, run threads.
 int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer_cap) {
 /////////Initializing local variables///////////
@@ -53,7 +54,7 @@ int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer
         g_users[i].len = sizeof(g_users->addr);
     }
     for (size_t i = 0; i < offer_cap; i++) {
-        g_offers[i].phase = 2;
+        g_offers[i].phase = 0;
     }
     openlog("CHEEMS", LOG_PERROR, LOG_USER);
 
@@ -101,7 +102,7 @@ int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer
     return 0;
 }
 
-//DONE Worker thread for handling connections. 
+/* Worker function spawned as a thread. Accepts incoming connections and listens on the via epoll. */ 
 void *worker(void *arg) {
     int lisneter = g_tcp->handle;
     struct sockaddr_in addr;
@@ -120,6 +121,22 @@ void *worker(void *arg) {
         if (nfds == -1) { term_thread("EPOLL FAILED", LOG_ALERT, ((Tinfo*)arg)->id); }
         for (int n = 0; n < nfds; ++n) {
             if (events[n].data.fd == g_tcp->handle) { //Accept connections
+                pthread_mutex_lock(&m_users);
+                for (size_t i = 0; i < g_user_cap; i++) {
+                    if (g_users[i].active == 0) {
+                        connection = accept(g_tcp->handle, (struct sockaddr *) (&g_users[i].addr), &g_users[i].len);
+                        if (connection == -1) {
+                            pthread_mutex_unlock(&m_users);
+                            continue;
+                        } else {
+                            g_users[i].active = 1;
+                            pthread_mutex_unlock(&m_users);
+                            g_users[i].tid = ((Tinfo*)arg)->id;
+                            g_users[i].timeout = 180;
+                            g_serverLoad[((Tinfo*)arg)->id]  = g_serverLoad[((Tinfo*)arg)->id]+1;
+                        }
+                    }
+                }
                 connection = accept(g_tcp->handle, (struct sockaddr *) &addr, &len);
                 if (connection == -1) { 
                     continue;
@@ -135,11 +152,11 @@ void *worker(void *arg) {
                 if (events[n].events == 8193) { close(events[n].data.fd); }
                 else { process_msg(events[n].data.fd, ((Tinfo*)arg)->id); } //Process msg from other fds (clients) }
             }            
-    }
         }
+    }
 }
 
-//VIP ADD OTHER CODES
+/* Server-side function for processing messages based on their Message::code. */
 void process_msg(int connection, int thread_id) {
     Message msg;
     if ( recv_(connection, &msg) == -1) {
@@ -150,43 +167,54 @@ void process_msg(int connection, int thread_id) {
             register_(connection, &msg);
             break;
         case LOGIN:
-            login(connection, &msg, thread_id, &m_users, g_users);
+            login(connection, &msg, thread_id, &m_users, g_users, g_user_cap);
             break;
         case NEW_OFFER:
             receive_new(connection, &msg, g_offers, g_offer_cap, g_users, g_user_cap, &m_offers);
             break;
         case ACCEPT_OFFER:
-            elect_supplier(connection, &msg);
+            elect_supplier(connection, &msg, g_offers, g_offer_cap);
             break;
         default:
             break;
     }
       
 }
+
+/* Set the supplier with the lowest bid as the new handler for the order.
+    Returns a message:
+        BID_DECLINE with "{id}{lowETA}{supETA}" on failure
+        BID_ACCEPT wtih "{id}" on successful election 
+*/
 void elect_supplier(int connection, Message *msg, Offer *o_list, int on) {
     int id, eta;
     sscanf(msg->message, "%d %d", &id, &eta);
     for (size_t i = 0; i < on; i++) {
-        if ( o_list[i].phase == 2 ) { continue; }
+        if ( o_list[i].phase == 0 ) { continue; }
         if ( o_list[i].id == id && o_list[i].lowSup_eta <= eta ) {
             Message temp_msg;
-            sprintf(temp_msg.message,"%d %d %D", &o_list[i].id, &o_list[i].lowSup_eta, &id);
-            send_(connection, BID_ETA, &temp_msg);
+            sprintf(temp_msg.message,"%d %d %d", o_list[i].id, o_list[i].lowSup_eta, eta);
+            send_(connection, BID_DECLINE, &temp_msg);
             return;
-        } else {
+        } else if (o_list[i].id == id && o_list[i].lowSup_eta > eta ) {
             //OFFERLIST ZEROED SET IT MAX VALUE ETC. 100000
             o_list[i].lowSup_eta = eta;
             o_list[i].sup_handle = connection;
+            Message temp_msg;
+            sprintf(temp_msg.message, "%d", id);
+            send_(connection, BID_ACCEPT, &temp_msg);
         }
     }
 }
-//DONE Inline function for syslog() & pthread_exit()
+/*Inline function for syslog() & pthread_exit().
+Terminates the current thread and logs the event. */
 inline void term_thread(const char *err, int type, int id) {
     syslog(type, "T%d: %s", id, err);
     pthread_exit(NULL);
 }
 
-//DONE Inline function for recv(). If recovering data from the handle returns -1 it closes the socket and makes the user inactive;
+/*Inline function for recv(). If recovering data from the handle returns -1, 
+it closes the socket and makes the user inactive. */
 inline int recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
         int i = 0;
@@ -200,7 +228,7 @@ inline int recv_(int handle, Message *msg){
     } else { return 0; }
 }
 
-//DONE Inline function for send(). Passing NULL as msg makes the msg code-only. Acts the same as recv_() when it encounters -1 for sending;
+/*Inline function for send(). Passing NULL as msg makes the msg code-only. Acts the same as recv_() when it encounters -1 for sending. */
 inline int send_(int handle, int code, Message *msg){
     int clear = 0;
     if (msg == NULL) {
