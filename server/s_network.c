@@ -8,6 +8,11 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <stdbool.h>
+#include <pthread.h>
+
+#define BUFF_SIZE 30
+#define CRED_SIZE 10
+
 #define CAPACITY 10
 #define MSG_LEN 100
 #define MSG_TYPE 10
@@ -39,7 +44,7 @@
 
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
-
+#define LIMIT_REACHED 52
 #define HERROR 60
 
 
@@ -52,6 +57,7 @@ typedef struct server {
 
 typedef struct user {
     int active; //Czy struktura jest uzywana
+    int logged;
     struct sockaddr_in addr; //Adres uzytkownika
     socklen_t len; //Dlugosc adresu uzytkownika
     int handle; //Deskryptor
@@ -77,22 +83,31 @@ typedef struct offer {
     //1 -> in progrress
     int phase;
     User *cli_ptr; //Wskaznik do klienta w tablicy uzytkownikow
-    struct sockaddr_in cli_addr; //Adres klienta
     User *sup_ptr; //Wskaznik do dostawcy w tablicy uzytkownikow
-    struct sockaddr_in sup_addr; //Adres najlepszego dostawcy
     int id; //ID oferty
     int active_eta; //Czas do zakonczenia licytacji
     int lowSup_eta; // Obecnie najniszy bid w licytacji
-    char client_name[10]; // Nazwa klienta
     char resource[20]; // LIcytowany zasob
     int quantity; // Ilosc licytowanego zasobu
 } Offer;
+
+typedef struct {
+    char login[CRED_SIZE];
+    char password[CRED_SIZE];
+    int type;
+} Credentials;
+
+typedef struct {
+    FILE *file;
+    pthread_mutex_t mutex;
+} Passwd;
 
 typedef struct sclock {
     int u_size;
     User *uptr;
     int o_size;
     Offer *optr;
+    int *tLoad_ptr;
 } Sclock;
 
 #endif

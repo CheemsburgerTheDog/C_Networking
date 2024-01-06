@@ -8,5 +8,5 @@
 
 int main() {
     InitPasswd("/home/cheemsburger/Desktop/C_Networking/server/passwd");
-    InitServer("127.0.0.1", PORT, CLIENTS_SIZE, THREADS, USER_CAP, OFFER_CAP);
+    InitServer("192.168.0.30", PORT, CLIENTS_SIZE, THREADS, USER_CAP, OFFER_CAP);
 }

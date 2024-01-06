@@ -25,7 +25,7 @@ typedef struct input_state {
     int id;
     int eta;
 } InputState;
-
+static pthread_t t_clock;
 InputState inputState;
 int elected = 0;
 int clock_print = 1;
@@ -45,6 +45,7 @@ void client_mode();
 void await_finalize(int, int);
 void process_input();
 void process_msg();
+void *clock_();
 
 int main (int argc, char* argv[]) {
     run("127.0.0.1", 7030);
@@ -124,11 +125,11 @@ void register_() {
     recv_(handle, &msg);
     switch (msg.code) {
         case REGISTER_SUCCESFUL:
-            printf("Registration succesful. Reenter the app to login.");
+            printf("Registration succesful. Reenter the app to login.\n");
             exit(0);
             break;
         case REGISTER_FAILED:
-            perror_("Registration failed. Invalid format or credentials taken");
+            perror_("Registration failed. Invalid format or credentials taken\n");
     }
 
 }
@@ -179,10 +180,11 @@ void client_mode() {
 void supplier_mode() {
     offers = (Offer_out*) malloc(sizeof(Offer_out)*MAXLIST);
     memset(offers, 0, sizeof(Offer_out)*MAXLIST);
+    pthread_create(&t_clock, NULL, clock_, NULL);
     int epollfd, nfds;
     struct epoll_event ev, events[2];
     epollfd = epoll_create(2);
-    if (epollfd == 1) { perror_("EPOLL FAILURE"); }
+    if (epollfd == -1) { perror_("EPOLL FAILURE"); }
     ev.events = EPOLLIN;
     ev.data.fd = 0;
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, 0, &ev) == -1) { perror_("EPOLL_CTL ERROR"); }
@@ -320,7 +322,7 @@ void process_input() {
         }   
     }
 }
-void *clock() {
+void *clock_() {
     while(1) {
         sleep(1);
         if ( clock_print == 1 ) {
@@ -329,7 +331,7 @@ void *clock() {
         }
         for (size_t i = 0; i < MAXLIST; i++) {
             if ( offers[i].state == 0 ){ continue; }
-            if ( clock_print == 1 ) {
+            if ( clock_print == 1 && offers[i].state == 2) {
                 printf("%d %d %s %s %d\n",
                 offers[i].id,
                 offers[i].eta,
