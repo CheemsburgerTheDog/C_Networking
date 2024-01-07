@@ -18,8 +18,8 @@
 #define MSG_TYPE 10
 
 #define NSPEC 0
-#define SUPPLIER 1
-#define CLIENT 2
+#define SUPPLIER 2
+#define CLIENT 1
 
 #define REGISTER 10
 #define REGISTER_SUCCESFUL 11
@@ -37,13 +37,14 @@
 #define ACCEPT_ACCEPT 35
 #define ACCEPT_DECLINE 36
 #define TRANSACTION_STARTED 39
-#define OFFER_FINISHED 38
+#define TRANSACTION_FINISHED 38
 #define INPROGRESS 40
 #define BID_ACCEPT 41
 #define BID_DECLINE 42
-
+#define BID_BYE 43
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
+#define OFFER_ABANDON 53
 #define LIMIT_REACHED 52
 #define HERROR 60
 

@@ -23,7 +23,7 @@ static pthread_t *t_threads;
 static pthread_t t_clock;
 static int g_offer_cap;       
 static int g_users_cap;                               
-int highest_id = 0;
+int highest_id = 1;
 
 static Passwd *passwd;
 void InitPasswd(char[]);
@@ -33,13 +33,14 @@ void *worker(void*);
 void term_thread(const char*, int, int);
 void process_msg(int, int);
 void elect_supplier(int, Message*, int);
+void finilize(int, Message*, int);
 void receive_new(int, Message*, int);
 void *clock_(void*);
 int register_(int, Message*, int);
 int login(int, Message*, pthread_mutex_t*, User*, int, int);
 void propagate(Message*);
 //DONE Initialize ports, all data structures, run threads.
-int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer_cap) {
+int InitServer(int tport, int tn, int threads, int user_cap, int offer_cap) {
 /////////Initializing local variables///////////
     int temp;
     g_offer_cap = offer_cap;
@@ -60,7 +61,7 @@ int InitServer(char *ip, int tport, int tn, int threads, int user_cap, int offer
         g_users[i].len = sizeof(g_users->addr);
     }
     for (size_t i = 0; i < g_offer_cap; i++) {
-        g_offers[i].active_eta = 1000000;
+        g_offers[i].lowSup_eta = 1000000;
     }
     
     openlog("CHEEMS", LOG_PERROR, LOG_USER);
@@ -186,16 +187,32 @@ void process_msg(int connection, int tid) {
         case ACCEPT_OFFER:
             elect_supplier(connection, &msg, tid);
             break;
+        case TRANSACTION_FINISHED:
+            finilize(connection, &msg, tid);
+            break;
         default:
             break;
     }
       
 }
-
+void finilize(int connection, Message *msg, int tid) {
+    int id;
+    sscanf(msg->message,"%d", &id);
+    for (size_t i = 0; i < g_offer_cap; i++) {
+        if (g_offers[i].phase!=2) { continue; }
+        if ( g_offers[i].id == id ) {
+            send_(g_offers[i].cli_ptr->handle, TRANSACTION_FINISHED, msg, g_offers[i].cli_ptr->tid);
+            g_offers[i].phase = 0; 
+            g_offers[i].sup_ptr->busy = 0;
+            g_offers[i].cli_ptr->busy = 0;
+        } 
+    }
+    
+}
 void receive_new(int connection, Message *msg, int tid) {
     User *temp_cli_ptr = NULL;
     for (size_t i = 0; i < g_users_cap; i++) {
-        if (g_users[i].handle = connection) {
+        if (g_users[i].handle == connection) {
             temp_cli_ptr = &g_users[i];
         }
     }
@@ -208,11 +225,21 @@ void receive_new(int connection, Message *msg, int tid) {
             sscanf(msg->message,"%d %s %d", &g_offers[i].active_eta, g_offers[i].resource,  &g_offers[i].quantity);
             g_offers[i].phase = 1;
             g_offers[i].cli_ptr = temp_cli_ptr;
+            g_offers[i].id = highest_id;
+            highest_id = highest_id+1;
             pthread_mutex_unlock(&m_offers);
             send_(connection, NEW_ACCEPTED, NULL, tid);
             Message temp;
+            temp.code = NEW_OFFER;
             sprintf(temp.message, "%d %s %d %s %d", g_offers[i].id, g_offers[i].cli_ptr->name, g_offers[i].active_eta, g_offers[i].resource, g_offers[i].quantity);
-            propagate(&temp);
+            int d = 0;
+            while (d < g_users_cap) {
+                if (g_users[d].active == 1 && g_users[d].type == SUPPLIER) {
+                    int g = g_users[d].handle;
+                    send(g_users[d].handle, &temp, sizeof(Message), 0);
+                }
+                d = d+1;
+            }           
             return;
         }
     }
@@ -228,7 +255,10 @@ void receive_new(int connection, Message *msg, int tid) {
 */
 void elect_supplier(int connection, Message *msg, int tid) {
     int id, eta;
+    Message temp;
+    temp.code = BID_BYE;
     sscanf(msg->message, "%d %d", &id, &eta);
+    sprintf(temp.message, "%d", eta);
     for (size_t i = 0; i < g_offer_cap; i++) {
         if ( g_offers[i].phase == 0 ) { continue; }
         if ( g_offers[i].id == id ) {
@@ -240,6 +270,10 @@ void elect_supplier(int connection, Message *msg, int tid) {
                 send_(connection, BID_DECLINE, &temp_msg, tid);
                 return;
             } else {
+                if (g_offers[i].lowSup_eta < 1000000) {
+                    send(g_offers[i].sup_ptr->handle, &temp, sizeof(Message), 0);
+                    g_offers[i].sup_ptr->busy = 0;
+                }
                 g_offers[i].lowSup_eta = eta;
                 for (int j = 0; j < g_users_cap; j++) {
                     if (connection == g_users[j].handle) {
@@ -261,14 +295,14 @@ void elect_supplier(int connection, Message *msg, int tid) {
 }
 /*Inline function for syslog() & pthread_exit().
 Terminates the current thread and logs the event. */
-inline void term_thread(const char *err, int type, int id) {
+void term_thread(const char *err, int type, int id) {
     syslog(type, "T%d: %s", id, err);
     pthread_exit(NULL);
 }
 
 /*Inline function for recv(). If recovering data from the handle returns -1, 
 it closes the socket and makes the user inactive. */
-inline int recv_(int handle, Message *msg, int thread_id) {
+int recv_(int handle, Message *msg, int thread_id) {
     if (recv(handle, msg, sizeof(Message), 0) == -1) {
         for (size_t i = 0; i < g_users_cap; i++) {
             if (g_users[i].handle == handle && g_users[i].active == 1 ) {
@@ -282,7 +316,7 @@ inline int recv_(int handle, Message *msg, int thread_id) {
 }
 
 /*Inline function for send(). Passing NULL as msg makes the msg code-only. Acts the same as recv_() when it encounters -1 for sending. */
-inline int send_(int handle, int code, Message *msg, int thread_id){
+int send_(int handle, int code, Message *msg, int thread_id){
     int clear = 0;
     if (msg == NULL) {
         clear = 1;
@@ -412,40 +446,39 @@ void *clock_(void *str) {
             if (((Sclock*)str)->optr[i].phase == 0 ) { continue; }
             ((Sclock*)str)->optr[i].active_eta = ((Sclock*)str)->optr[i].active_eta - 1;
             //OFFER ACTIVE TIMEOUT
-            if (((Sclock*)str)->optr[i].active_eta < 0) {
+            if (((Sclock*)str)->optr[i].active_eta < 0 && ((Sclock*)str)->optr[i].phase == 1 ) {
                 if ( ((Sclock*)str)->optr[i].lowSup_eta == 1000000) {
                     ((Sclock*)str)->optr[i].cli_ptr->busy = 0;
                     send_(((Sclock*)str)->optr[i].cli_ptr->handle, OFFER_TIMEOUT, NULL, ((Sclock*)str)->optr[i].cli_ptr->tid);
                     ((Sclock*)str)->optr[i].phase = 0;
+                    continue;
                 } else { //START TRANSACTION ON BOTH SIDES
                     Message msg;
-                    sprintf(msg.message, "%d", (((Sclock*)str)->optr[i].id));
+                    sprintf(msg.message, "%d", (((Sclock*)str)->optr[i].lowSup_eta));
                     ((Sclock*)str)->optr[i].cli_ptr->busy = 1;
                     ((Sclock*)str)->optr[i].sup_ptr->busy = 1;
                     send_(((Sclock*)str)->optr[i].sup_ptr->handle, TRANSACTION_STARTED, &msg, ((Sclock*)str)->optr[i].sup_ptr->tid);
-                    send_(((Sclock*)str)->optr[i].sup_ptr->handle, TRANSACTION_STARTED, &msg, ((Sclock*)str)->optr[i].sup_ptr->tid);
+                    send_(((Sclock*)str)->optr[i].cli_ptr->handle, TRANSACTION_STARTED, &msg, ((Sclock*)str)->optr[i].cli_ptr->tid);
+                    ((Sclock*)str)->optr[i].phase = 2;
+                    ((Sclock*)str)->optr[i].active_eta = (((Sclock*)str)->optr[i].lowSup_eta)+3;
+                    continue;
                 }
-            } else {
-                //ID  ETA NAME RESOURCE QUA LOWETA
-                printf("%d %d %s %s %d %d\n",
-                ((Sclock*)str)->optr[i].id,
-                ((Sclock*)str)->optr[i].active_eta,
-                ((Sclock*)str)->optr[i].cli_ptr->name,
-                ((Sclock*)str)->optr[i].resource,
-                ((Sclock*)str)->optr[i].quantity,
-                ((Sclock*)str)->optr[i].lowSup_eta
-                );
             }
+            // if (((Sclock*)str)->optr[i].phase == 2  && ((Sclock*)str)->optr[i].active_eta < 0) {
+            //     send_(((Sclock*)str)->optr[i].sup_ptr->handle, OFFER_ABANDON, NULL, ((Sclock*)str)->optr[i].sup_ptr->tid);
+            //     send_(((Sclock*)str)->optr[i].cli_ptr->handle, OFFER_ABANDON, NULL, ((Sclock*)str)->optr[i].cli_ptr->tid);
+            //     ((Sclock*)str)->optr[i].phase = 0;
+            // }
+            //ID  ETA NAME RESOURCE QUA LOWETA
+            printf("%d %d %s %s %d %d\n",
+            ((Sclock*)str)->optr[i].id,
+            ((Sclock*)str)->optr[i].active_eta,
+            ((Sclock*)str)->optr[i].cli_ptr->name,
+            ((Sclock*)str)->optr[i].resource,
+            ((Sclock*)str)->optr[i].quantity,
+            ((Sclock*)str)->optr[i].lowSup_eta );
+            fflush(stdout);  
         }
-        fflush(stdout);
-    }
-}
-
-inline void propagate(Message *msg) {
-    for (size_t i = 0; i < g_users_cap; i++) {
-        if (g_users[i].active == 1 && g_users[i].type == SUPPLIER) {
-            send_(g_users[i].handle, NEW_OFFER, msg, g_users[i].tid);
-        }  
     }
 }
 
