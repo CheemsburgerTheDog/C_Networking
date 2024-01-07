@@ -26,13 +26,15 @@ typedef struct input_state {
     int eta;
 } InputState;
 static pthread_t t_clock;
+static pthread_t t_main;
 InputState inputState;
 int elected = 0;
 int clock_print = 1;
 static Offer_out* offers;
 static int handle;
 static char *username;
-static int f_nonblock = 0;
+static int f_block = 0;
+int handling_time = 0;
 // "127.0.0.1 7777 UDP"
 void run(char *, int );
 void recv_(int handle, Message *);
@@ -40,7 +42,7 @@ void send_(int, Message*);
 void login_();
 void register_();
 void perror_(const char *);
-void supplier_mode();
+void *supplier_mode();
 void client_mode();
 void await_finalize(int, int);
 void process_input();
@@ -48,7 +50,7 @@ void process_msg();
 void *clock_();
 
 int main (int argc, char* argv[]) {
-    run("127.0.0.1", 7030);
+    run("192.168.10.10", 7030);
 }
 void login_() {
     Message msg;
@@ -70,7 +72,10 @@ void login_() {
         case LOGIN_SUCCESFUL:
             if (strcmp("1", msg.message) == 0) {
                 client_mode(handle);
-            } else { supplier_mode(); }
+            } else {    
+                pthread_create(&t_main, NULL, supplier_mode, NULL);
+                pthread_join(t_main, NULL);
+            }
             break;
         case LOGIN_FAILED:
             perror_("Login failed");
@@ -88,7 +93,7 @@ void run(char *ip, int port) {
     saddr.sin_port = htons(port);
     handle = socket(AF_INET, SOCK_STREAM, 0);
     if (connect(handle, (struct sockaddr*) &saddr, sizeof(saddr)) == -1) { perror_("! Connection failed !"); }
-    f_nonblock = fcntl(handle, F_GETFL, 0);
+    f_block = fcntl(handle, F_GETFL, 0);
     printf("Welcome to our platform. Please login or register:\n1. Login\n2. Register\n# ");
     scanf("%d", &choice);
     switch (choice) {
@@ -135,7 +140,8 @@ void register_() {
 }
 void client_mode() {
     while (1) {
-        fcntl(handle, F_SETFL, f_nonblock);
+        system("clear");
+        fcntl(handle, F_SETFL, f_block);
         int choice = 0;
         printf("1. Post new offer\n2. Exit\n# ");
         scanf("%d", &choice);
@@ -157,12 +163,13 @@ void client_mode() {
                 scanf("%d", &eta);
 
                 msg.code = NEW_OFFER;
-                sprintf(msg.message, "%s %d %s %d", username, eta, resource, quanitity);
+                sprintf(msg.message, "%d %s %d", eta, resource, quanitity);
                 send_(handle, &msg);
                 recv_(handle, &msg);
                 switch (msg.code) {
                     case NEW_ACCEPTED:
                         await_finalize(handle, eta);
+                        break;
                     case NEW_DECLINED:
                         printf("Offer not accapted. Try again\n");
                         break;
@@ -177,28 +184,38 @@ void client_mode() {
         }
     }
 }
-void supplier_mode() {
+void *supplier_mode() {
+
+        // process_msg();
+        // Message temp;
+        // temp.code = ACCEPT_OFFER;
+        // strcpy(temp.message,"1 110");
+        // send(handle, &temp, sizeof(Message), 0);
+        // process_msg();
+    fcntl(handle, F_SETFL, fcntl(handle, F_GETFL, 0) | O_NONBLOCK);
+    fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
     offers = (Offer_out*) malloc(sizeof(Offer_out)*MAXLIST);
     memset(offers, 0, sizeof(Offer_out)*MAXLIST);
-    pthread_create(&t_clock, NULL, clock_, NULL);
     int epollfd, nfds;
-    struct epoll_event ev, events[2];
+    struct epoll_event ev, events[3];
     epollfd = epoll_create(2);
-    if (epollfd == -1) { perror_("EPOLL FAILURE"); }
-    ev.events = EPOLLIN;
+    if (epollfd == -1) { perror_("EPOLL FAILURE\n"); }
+    ev.events = EPOLLIN | EPOLLET;
     ev.data.fd = 0;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, 0, &ev) == -1) { perror_("EPOLL_CTL ERROR"); }
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, 0, &ev) == -1) { perror_("EPOLL_CTL ERROR\n"); }
     ev.data.fd = handle;
-    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, handle, &ev) == -1) { perror_("EPOLL_CTL ERROR"); }
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, handle, &ev) == -1) { perror_("EPOLL_CTL ERROR\n"); }
+    pthread_create(&t_clock, NULL, clock_, NULL);
+    char trash[2];
+    while (read(0, trash, 1) > 0) { continue; }
     while(1) {
         nfds = epoll_wait(epollfd, events, 2, -1);
-        if (nfds == -1) { perror_("EPOLL ERROR"); }
-        for ( int n = 0; n<2;n++ ) {
+        if (nfds == -1) { perror_("EPOLL ERROR\n"); }
+        for ( int n = 0; n<nfds;n++ ) {
             if (events[n].data.fd == 0) { process_input(); } 
-            else { process_msg(); }
+            else if (events[n].data.fd == handle) { process_msg(); }
         }
     }
-    return;
 }
 void process_msg() {
     Message msg;
@@ -207,7 +224,7 @@ void process_msg() {
         case USER_TIMEOUT: {
             clock_print = 0;
             system("clear");
-            printf("You have been disconnected from the server due to inactivity.");
+            printf("You have been disconnected from the server due to inactivity.\n");
             close(handle);
             exit(0);
             break;
@@ -223,16 +240,9 @@ void process_msg() {
                         offers[i].resource,
                         &offers[i].quanitity);
                     offers[i].state = 2;
+                    break;
                 }
             }
-            break;
-        }
-        case INPROGRESS: {
-            system("clear");
-            printf("You have applied for an offer.\nYour account is locked until order completes.\n");
-            sleep(1);
-            sscanf(msg.message, "%d", &inputState.eta);
-            inputState.state = 4;
             break;
         }
         case BID_DECLINE: {
@@ -241,12 +251,25 @@ void process_msg() {
             sscanf(msg.message, "%d %d %d", &id, &tETA, &uETA);
             printf("Offer %d denied. Better offer was proposed.\nYour ETA: %d\nCurrent lowest server ETA:%d\n", id, uETA, tETA);
             inputState.state = 0;
+            clock_print = 1;
             break;
         } 
         case BID_ACCEPT: {
-            system("clear");
-            printf("Offer accepted. Your offer is currently the best\n");
             inputState.state = 4;
+            break;
+        }
+        case BID_BYE: {
+            int temp;
+            sscanf(msg.message, "%d", &temp);
+            system("clear");
+            printf("Your offer has been beaten. New best ETA: %d.\nPlace another offer.", temp);
+            inputState.state = 0; 
+            clock_print = 1;
+            break;
+        }
+        case TRANSACTION_STARTED: {
+            sscanf(msg.message, "%d",&handling_time);
+            inputState.state = 5;
             break;
         }
         default:
@@ -262,50 +285,29 @@ void process_input() {
             buffer[2] = '\0';
             system("clear");
             if ( strcmp(buffer, "1") == 0 ) {
-                printf("\nEnter offer ID: ");
-                inputState.state = 1;
                 clock_print = 0;
+                system("clear");
+                printf("\nEnter data in format:\n{ID} {ETA}\n");
+                inputState.state = 1;
                 return;
             }
             if (strcmp(buffer, "2") == 0) {
                 close(handle);
                 exit(0);
             }
-            printf("\nWrong option. Try again.");
+            printf("\nWrong option. Try again.\n");
             while (read(0, buffer, 10) > 0) { continue; }
             break;
         }
         case 1: {
-            b = read(0, buffer, 9);
-            buffer[b] = '\0';
-            int temp;
-            if (temp = atoi(buffer) == 0) {
-                while (read(0, buffer, 10) > 0) { continue; }
-                printf("\nIncorrect ID. Try again.");
-                return;
-            }
-            inputState.id = temp;
-            inputState.state = 2;
-            printf("\nEnter ETA: ");
-            while (read(0, buffer, 10) > 0) { continue; }
-            break;
-        }
-        case 2:{
-            b = read(0, buffer, 9);
-            buffer[b] = '\0';
-            int temp;
-            if (temp = atoi(buffer) == 0) {
-                while (read(0, buffer, 10) > 0) { continue; }
-                printf("\nIncorrect ETA. Try again.");
-                return;
-            }
-            inputState.eta = temp;
             Message msg;
             msg.code = ACCEPT_OFFER;
+            fcntl(0, F_SETFL, f_block);
+            scanf("%d %d", &inputState.id, &inputState.eta);
+            fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
             sprintf(msg.message, "%d %d", inputState.id, inputState.eta);
             send_(handle, &msg);
             inputState.state = 3;
-            while (read(0, buffer, 10) > 0) { continue; }
             break;
         }
         case 3: {
@@ -314,16 +316,16 @@ void process_input() {
             printf("Awaiting server respond. Please stand by...");
             break;
         }
-        case 4: {
+        case 4: 
+        case 5: {
             while (read(0, buffer, 10) > 0) { continue; }
-            system("clear");
-            printf("Server deems you busy. Server ETA: %d\n", inputState.eta);
             break;
-        }   
+        }    
     }
 }
 void *clock_() {
     while(1) {
+        fflush(stdout);
         sleep(1);
         if ( clock_print == 1 ) {
             system("clear");
@@ -342,6 +344,26 @@ void *clock_() {
             }
             offers[i].eta =  offers[i].eta-1;    
             if ( offers[i].eta < 0 ) { offers[i].state = 0; }
+            if (inputState.state == 4 && offers[i].id == inputState.id) {
+                clock_print = 0;
+                system("clear");
+                printf("Your offer is currently the best. Results in %d", offers[i].eta);
+            }
+            if (inputState.state == 5) {
+                clock_print = 0;
+                system("clear");
+                printf("You are currently handling offer %d. ETA: %d\n", inputState.id, handling_time);
+                fflush(stdout);
+                handling_time = handling_time-1;
+                if (handling_time-2 <= 1) {
+                    Message temp;
+                    sprintf(temp.message,"%d",inputState.id);
+                    temp.code = TRANSACTION_FINISHED;
+                    send_(handle, &temp);
+                    clock_print = 1;
+                    inputState.state = 0;
+                }
+            }   
         }
     }
 }
@@ -363,18 +385,19 @@ void send_(int handle, Message *msg){
 inline void perror_(const char *text) {
     if (handle > 1) { close(handle); }
     printf("%s", text);
-    exit(1);
+    // exit(1);
 }
 void await_finalize( int connection, int eta ) {
     Message msg;
     char name[10];
+
     int begin = 0 ;
     int n = 0;
     system("clear");
     fcntl(connection, F_SETFL, fcntl(connection, F_GETFL, 0) | O_NONBLOCK);
     while(1) {
         system("clear");
-        if (eta>=0 && begin == 0 ) { printf("Offer successfully posted!\nExpires in %d\n", eta + 8); } 
+        if (eta>=0 && begin == 0 ) { printf("Offer successfully posted!\nExpires in %d\n", eta); } 
         else { printf("Order expired. Awaiting server comfirmation...\n"); }
         n = recv(connection, &msg, sizeof(Message), 0);
         //////////////////
@@ -382,21 +405,28 @@ void await_finalize( int connection, int eta ) {
             sscanf(msg.message, "%s %d", name, &eta);
             begin = 1; 
         }
-        if ( begin == 1 ) {
+        if ( begin == 1 && eta >=0) {
             system("clear");
             printf("Supplier %s with the best ETA has been chosen. Estimated time: %d\n", name, eta);
         }
+        if ( begin == 1 && eta < 0 ) {
+            system("clear");
+            printf("Awaiting server response. Delay: %d\n", (-1)*eta);
+        }
         /////////////////////
-        if (n > 0 && msg.code == OFFER_FINISHED) { 
+        if (n > 0 && msg.code == TRANSACTION_FINISHED) { 
             system("clear");
             printf("Supplier has completed your order. You may post a new order.\n");
             sleep(3);
+            return;
         }
+        
         //////////////////////
         if (n > 0 && msg.code ==  OFFER_TIMEOUT) {
             system("clear");
             printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
             sleep(3);
+            return;
         }
         //////////////
         if ( ( n == -1 ) && ( eta + 8 < 0 ) ) {
