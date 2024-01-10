@@ -41,6 +41,7 @@ int InitServer(int, int, int, int, int);
             void register_(int, Message*, int);
             // Offer manipulation
             void elect_supplier(int , Message*, int );
+            void finalize(int, Message*, int);
 
 
 
@@ -72,8 +73,12 @@ int InitServer(int tport, int tn, int threads, int user_cap, int offer_cap) {
     for (size_t i = 0; i < user_cap; i++) {
         g_users[i].len = sizeof(g_users->addr);
     }
+    for (size_t i = 0; i < g_offer_cap; i++) {
+        g_offers[i].lowest = -1
+    }
+    
     openlog("CHEEMS", LOG_PERROR, LOG_USER);
-    passwd = fopen("/home/cheemsburger/Desktop/Project_V3/passwd", "a+");
+    passwd = fopen("/home/cheemsburger/Desktop/PS/C_Networking/passwd", "a+");
 ////////Preping server////////////////////////
     g_tcp->max_cap = user_cap;
     g_tcp->addr.sin_family = AF_INET;
@@ -86,6 +91,7 @@ int InitServer(int tport, int tn, int threads, int user_cap, int offer_cap) {
     int buffs = sizeof(Message)*((int)user_cap*1.3);
     buffs = buffs - (buffs%(sizeof(Message)));
     setsockopt(g_tcp->handle, SOL_SOCKET, SO_RCVBUF, &buffs, sizeof(buffs));
+    setsockopt(g_tcp->handle, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
     if ( listen(g_tcp->handle, tn) == -1) { 
         syslog(LOG_EMERG, "M %s", "Error at listening");
         exit(EXIT_FAILURE);
@@ -188,11 +194,11 @@ void process_msg(int connection, Message* msg, int tid) {
             receive_new(connection, msg, tid);
             break;
         case ACCEPT_OFFER:
-            elect_supplier(connection, &msg, tid);
+            elect_supplier(connection, msg, tid);
             break;
-        // case TRANSACTION_FINISHED:
-        //     finilize(connection, &msg, tid);
-        //     break;
+        case TRANSACTION_FINISHED:
+            finalize(connection, msg, tid);
+            break;
         default:
             break;
     }
@@ -326,24 +332,20 @@ void receive_new(int connection, Message *msg, int tid) {
 
 void elect_supplier(int connection, Message *msg, int tid) {
     int id, eta;
-    Message temp;
+    Message temp_msg;
     sscanf(msg->message, "%d %d", &id, &eta);
-    sprintf(temp.message, "%d", eta);
     for (size_t i = 0; i < g_offer_cap; i++) {
         if ( g_offers[i].phase < 2 ) { continue; }
         if ( g_offers[i].id == id ) {
             pthread_mutex_lock(&m_offers);
-            if (g_offers[i].lowest <= eta) {
-                pthread_mutex_unlock(&m_offers);
-                Message temp_msg;
-                sprintf(temp_msg.message,"%d %d %d", g_offers[i].id, g_offers[i].lowest, eta);
-                send_(connection, BID_DECLINE, &temp_msg, tid);
-                return;
-            } else {
-                if (g_offers[i].phase == 3) {
-                    send_(g_offers[i].sup_ptr->handle, BID_BYE, &temp, g_offers[i].sup_ptr->tid);
-                    g_offers[i].sup_ptr->busy = 0;
-                }
+            Message temp_msg;
+            sprintf(temp_msg.message,"%d %d %d", g_offers[i].id, g_offers[i].lowest, eta);
+            if( g_offers[i].lowest > eta && g_offers[i].phase == 3 ) {
+                send_(g_offers[i].sup_ptr->handle, BID_BYE, &temp_msg, g_offers[i].sup_ptr->tid);
+                g_offers[i].sup_ptr->busy = 0;  
+            }
+            if( g_offers[i].lowest > eta || g_offers[i].phase == 2 ) {
+                g_offers[i].phase = 3;
                 g_offers[i].lowest = eta;
                 for (int j = 0; j < g_users_cap; j++) {
                     if (connection == g_users[j].handle) {
@@ -351,20 +353,86 @@ void elect_supplier(int connection, Message *msg, int tid) {
                         break;
                     }
                 }
-                Message temp_msg;
-                sprintf(temp_msg.message, "%d", id);
+                pthread_mutex_unlock(&m_offers);
                 send_(connection, BID_ACCEPT, &temp_msg, tid);
+                return;
+            }
+            if (g_offers[i].lowest <= eta) {
+                pthread_mutex_unlock(&m_offers);
+                send_(connection, BID_DECLINE, &temp_msg, tid);
                 return;
             }
         }
     }
-    Message temp_msg;
+    pthread_mutex_unlock(&m_offers);
     sprintf(temp_msg.message,"%d %d %d", 0, 0, 0);
     send_(connection, BID_DECLINE, &temp_msg, tid);
     return;
 }
 
-void *clock_(void*){}
+void finalize(int connection, Message *msg, int tid) {
+    int id;
+    sscanf(msg->message,"%d", &id);
+    for (size_t i = 0; i < g_offer_cap; i++) {
+        if (g_offers[i].phase != 4) { continue; }
+        if ( g_offers[i].id == id ) {
+            send_(g_offers[i].cli_ptr->handle, TRANSACTION_FINISHED, msg, g_offers[i].cli_ptr->tid);
+            g_offers[i].phase = 0; 
+            g_offers[i].sup_ptr->busy = 0;
+            g_offers[i].cli_ptr->busy = 0;
+        } 
+    }
+}
+
+void *clock_(void*){
+    Message temp;
+    while (1) {
+        printf("ID C_NAME   RES     AMT  S_NAME   LOW  ST_IN\n");
+        printf("10  CLI   RESOURCE  100    SUP   100    130");
+        system("clear");
+        for (size_t i = 0; i < g_offer_cap; i++) {
+            if (g_offers[i].phase < 2) { continue; }
+            g_offers[i].start_in = g_offers[i].start_in-1;
+            if (g_offers[i].phase == (2 || 3)) { //PRINT AVAILABLE OFFERS
+                printf("%d  %s  %s  %d  %s  %d  %d\n",
+                g_offers[i].id,
+                g_offers[i].cli_ptr->name,
+                g_offers[i].resource,
+                g_offers[i].quantity,
+                g_offers[i].sup_ptr->name,
+                g_offers[i].lowest, 
+                g_offers[i].start_in);
+            }
+            if (g_offers[i].start_in <= 0) {
+                if (g_offers[i].phase == 2) { //UNTOUCHED OFFER TIMEOUT
+                    send_(g_offers[i].cli_ptr->handle, OFFER_TIMEOUT, &temp, g_offers[i].cli_ptr->tid); 
+                    g_offers[i].phase = 0;
+                }
+                if (g_offers[i].phase == 3) { // TOUCHED OFFER TRANSACT STATY
+                    sprintf(temp.message, "%d %d %s", g_offers[i].id, g_offers[i].lowest, g_offers[i].sup_ptr->name);
+                    send_(g_offers[i].cli_ptr->handle, TRANSACTION_STARTED, &temp, g_offers[i].cli_ptr->tid); //TO CLI
+                    sprintf(temp.message, "%d %d %s", g_offers[i].id, g_offers[i].lowest, g_offers[i].cli_ptr->name);
+                    send_(g_offers[i].sup_ptr->handle, TRANSACTION_STARTED, &temp, g_offers[i].sup_ptr->tid); //TO SUP
+                    g_offers[i].phase = 4;
+                    g_offers[i].comp_in = g_offers[i].lowest+10;
+                }
+                if (g_offers[i].phase == 4) {
+                    g_offers[i].comp_in = g_offers[i].comp_in-1;
+                    if (g_offers[i].comp_in <= 0) {
+                        send_(g_offers[i].cli_ptr->handle, TRASACTION_ABANDON, &temp, g_offers[i].cli_ptr->tid);
+                        g_offers[i].phase = 0;
+                    }
+                }
+            }
+                   
+            }
+            
+            
+        }
+        
+    }
+    
+}
 
 
 

@@ -37,7 +37,7 @@
 #define BID_BYE 43
 #define USER_TIMEOUT 50
 #define OFFER_TIMEOUT 51
-#define OFFER_ABANDON 53
+#define TRASACTION_ABANDON 53
 #define LIMIT_REACHED 52
 #define HERROR 60
 
