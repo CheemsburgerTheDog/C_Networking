@@ -78,7 +78,7 @@ int InitServer(int tport, int tn, int threads, int user_cap, int offer_cap) {
     }
     
     openlog("CHEEMS", LOG_PERROR, LOG_USER);
-    passwd = fopen("/home/cheemsburger/Desktop/PS/C_Networking/passwd", "a+");
+    passwd = fopen("/home/ps4/Pobrane/C_Networking-Projekt_V3", "a+");
 ////////Preping server////////////////////////
     g_tcp->max_cap = user_cap;
     g_tcp->addr.sin_family = AF_INET;
