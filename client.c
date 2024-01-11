@@ -9,21 +9,26 @@
 #include <strings.h>
 #include <sys/epoll.h>
 #include "structs.c"
-
-pthread_t t_clock;
+#define MAX_OFFERS 6
+pthread_t t_clock, t_sup;
 static Offer_out* offers;
 static int handle;
 int f_block = 0;
 int stdin_wakeup = 0;
+int clock_print = 1;
+int gid, gsETA;
+int input_state = 0;
+char gcli_name[10];
 // MAIN 
 void run(char *, int );
 // Authentication
     void register_();
     void login_();
         void client_mode();
-            void finalize(int, Message*);
-        void supplier_mode();
+            void finalize(int);
+        void *supplier_mode(void*);
             void process_msg(Message*);
+        void *clock_(void*);
 // UTILITIES 
 void recv_(int handle, Message *);
 void send_(int, Message*);
@@ -79,7 +84,10 @@ void login_() {
     switch (msg.code) {
         case LOGIN_SUCCESFUL:
             if (strcmp("1", msg.message) == 0) { client_mode(handle); } 
-            else { supplier_mode(); }
+            else { 
+                pthread_create(&t_sup, NULL, supplier_mode, NULL);
+                pthread_join(t_sup, NULL);
+            }
             break;
         case LOGIN_FAILED:
             perror_("Login failed\n");
@@ -142,7 +150,7 @@ void client_mode() {
                 recv_(handle, &msg);
                 switch (msg.code) {
                     case NEW_ACCEPTED:
-                        // finalize(handle, &msg);
+                        finalize(eta);
                         break;
                     default:
                     case LIMIT_REACHED:
@@ -162,68 +170,73 @@ void client_mode() {
     }
 }
 
-// void finalize(Message* msg) {
-//     int recv_eta;
-//     sscanf(msg->message)
-//     int begin = 0 ;
-//     int n = 0;
-//     system("clear");
-//     fcntl(handle, F_SETFL, fcntl(handle, F_GETFL, 0) | O_NONBLOCK);
-//     while(1) {
-//         system("clear");
-//         if (eta>=0 && begin == 0 ) { printf("Offer successfully posted!\nExpires in %d\n", eta); } 
-//         else { printf("Order expired. Awaiting server comfirmation...\n"); }
-//         n = recv(handle, &msg, sizeof(Message), 0);
-//         //////////////////
-//         if ( n > 0 && msg.code == TRANSACTION_STARTED ) {
-//             sscanf(msg.message, "%s %d", name, &eta);
-//             begin = 1; 
-//         }
-//         if ( begin == 1 && eta >=0) {
-//             system("clear");
-//             printf("Supplier %s with the best ETA has been chosen. Estimated time: %d\n", name, eta);
-//         }
-//         if ( begin == 1 && eta < 0 ) {
-//             system("clear");
-//             printf("Awaiting server response. Delay: %d\n", (-1)*eta);
-//         }
-//         /////////////////////
-//         if (n > 0 && msg.code == TRANSACTION_FINISHED) { 
-//             system("clear");
-//             printf("Supplier has completed your order. You may post a new order.\n");
-//             sleep(3);
-//             return;
-//         }
-        
-//         //////////////////////
-//         if (n > 0 && msg.code ==  OFFER_TIMEOUT) {
-//             system("clear");
-//             printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
-//             sleep(3);
-//             return;
-//         }
-//         //////////////
-//         if ( ( n == -1 ) && ( eta + 8 < 0 ) ) {
-//             printf("! No respond from the server !\n");
-//             fflush(stdout);
-//             sleep(2);
-//             system("clear");
-//             return;
-//         }
-//         fflush(stdout);
-//         eta = eta-1;
-//         sleep(1);
-//     }
-//     return;
-// }
+void finalize(int internalETA) {
+    int recv_eta, id;
+    char sup_name[10];
+    int begin = 0;
+    int n = 0;
+    system("clear");
+    fcntl(handle, F_SETFL, fcntl(handle, F_GETFL, 0) | O_NONBLOCK);
+    while(1) {
+        Message temp;
+        system("clear");
+        if (internalETA>=0 && begin == 0 ) { printf("Offer successfully posted!\nExpires in %d\n", internalETA); } 
+        else { printf("Order expired. Awaiting server comfirmation...\n"); }
+        n = recv(handle, &temp, sizeof(Message), 0);
+        //////////////////
+        if ( n > 0 && temp.code == TRANSACTION_STARTED ) {
+            sscanf(temp.message, "%d %d %s", &id, &recv_eta, sup_name);
+            begin = 1; 
+        }
+        if ( begin == 1 && recv_eta >=0) {
+            system("clear");
+            printf("Supplier %s with the best eta has been chosen.\nEstimated completion time: %d\n", sup_name, recv_eta);
+            recv_eta = recv_eta -1;
+        }
+        if ( begin == 1 && recv_eta < 0 ) {
+            recv_eta = recv_eta -1;
+            system("clear");
+            printf("Awaiting server response. Delay: %d\n", (-1)*recv_eta);
+        }
+        /////////////////////
+        if (n > 0 && temp.code == TRANSACTION_FINISHED) { 
+            system("clear");
+            printf("Supplier has completed your order. You may post a new order.\n");
+            sleep(3);
+            return;
+        }
+        //////////////////////
+        if (n > 0 && temp.code == OFFER_TIMEOUT) {
+            system("clear");
+            printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
+            sleep(3);
+            return;
+        }
+        if (n > 0 && temp.code == TRASACTION_ABANDON) {
+            system("clear");
+            printf("No respond from the supplier. Transaction may have been abandoned.\n Post a new order.\n");
+            sleep(3);
+            return;     
+        }
+        //////////////
+        if ( ( n == -1 ) && ( ( begin == 0 && internalETA + 10 < 0 ) || (begin == 1 && recv_eta + 20 < 0 )) ) {
+            printf("! No respond from the server !\n");
+            fflush(stdout);
+            sleep(2);
+            system("clear");
+            return;
+        }
+        fflush(stdout);
+        internalETA = internalETA-1;
+        sleep(1);
+    }
+    return;
+}
 
-
-
-
-void supplier_mode() {
-    offers = (Offer_out*) malloc(sizeof(Offer_out)*10);
-    memset(offers, 0, sizeof(Offer_out)*10);
-    // pthread_create(&t_clock, NULL, clock_, NULL);
+void *supplier_mode(void *) {
+    offers = (Offer_out*) malloc(sizeof(Offer_out)*MAX_OFFERS);
+    memset(offers, 0, sizeof(Offer_out)*MAX_OFFERS);
+    pthread_create(&t_clock, NULL, clock_, NULL);
     int epollfd, nfds;
     struct epoll_event ev, events[2];
     epollfd = epoll_create(1);
@@ -241,16 +254,42 @@ void supplier_mode() {
                 char buff[20];
                 n = read(0, buff, 20);
                 buff[n] = '\0';
-                Message temp;
-                strcpy(temp.message, buff);
-                temp.code = ACCEPT_OFFER;
-                send_(handle, &temp);
-             } 
+                switch (input_state) {
+                    case 0:
+                        int c = atoi(buff);
+                        if (c == 1) { input_state = 1; }
+                        if (c == 2) { 
+                            close(handle);
+                            exit(0);
+                        }
+                        break;
+                    case 1:
+                        Message temp;
+                        strcpy(temp.message, buff);
+                        temp.code = ACCEPT_OFFER;
+                        send_(handle, &temp);
+                        input_state = 2;
+                        break;
+                    case 2: { break; }
+                    case 3: {
+                        if (strcmp(buff, "DONE\n") == 0) {
+                            Message temp;
+                            temp.code = TRANSACTION_FINISHED;
+                            send_(handle, &temp);
+                            input_state = 0;
+                            clock_print = 1;
+                        }
+                        break;
+                    }
+                    default:
+                        break;
+                }
+            } 
             if (events[n].data.fd == handle && events[n].events == 1){
                 Message received;
                 recv_(handle, &received);
                 process_msg(&received);
-            } else if (events[n].data.fd == handle && events[n].events == 1) {
+            } else if (events[n].data.fd == handle && events[n].events != 1) {
                 perror_(" ! CONNECTION LOST !\n! HOST CLOSED REMOTLY !");
             }
             
@@ -261,6 +300,7 @@ void supplier_mode() {
 void process_msg(Message *msg) {
     switch (msg->code) {
         case USER_TIMEOUT: {
+            clock_print = 0;
             system("clear");
             printf("You have been disconnected from the server due to inactivity.");
             close(handle);
@@ -268,7 +308,7 @@ void process_msg(Message *msg) {
             break;
         }
         case NEW_OFFER: {
-            for (size_t i = 0; i < 10; i++) {
+            for (size_t i = 0; i < MAX_OFFERS; i++) {
                 if (offers[i].state == 0) {
                     offers[i].state = 1;
                     sscanf(msg->message, "%d %s %d %s %d", 
@@ -278,37 +318,82 @@ void process_msg(Message *msg) {
                         offers[i].resource,
                         &offers[i].quanitity);
                     offers[i].state = 2;
+                    break;
                 }
             }
             break;
         }
         case BID_BYE: {
+            clock_print = 0;
             system("clear");
             int id, uETA, tETA;
             sscanf(msg->message, "%d %d %d", &id, &uETA, &tETA);
             printf("Your offer has been bettered.\nYour current: %d\nNew best:%d\n",uETA, tETA);
+            sleep(3);
+            clock_print = 1;
+            input_state = 0;
             break;
         }
         case BID_DECLINE: {
+            clock_print = 0;
             system("clear");
             int id, uETA, tETA;
             sscanf(msg->message, "%d %d %d", &id, &tETA, &uETA);
             printf("Offer %d denied. Better offer was proposed.\nYour ETA: %d\nCurrent lowest server ETA:%d\n", id, uETA, tETA);
+            sleep(3);
+            input_state = 0;
+            clock_print = 1;
             break;
         } 
         case BID_ACCEPT: {
+            clock_print = 0;
             system("clear");
-            printf("Offer accepted. Your offer is currently the best\n");
+            printf("Offer accepted. Your offer is currently the best.\n");
             break;
+        }
+        case TRANSACTION_STARTED: {
+            sscanf(msg->message, "%d %d %s", &gid, &gsETA, gcli_name);
+            clock_print = 2;
+            input_state = 3;
         }
         default:
             break;
     }
 }
 
-
-
-
+void *clock_(void* arg) {
+    while (1) {
+        sleep(1);
+        if (clock_print == 1) {
+            system("clear");
+            if (input_state == 0) {
+                printf("1. Post a new bid\n2. Exit\n");    
+            } else if (input_state == 1) {
+                printf("FORMAT: {ID} {ETA}\n# ");
+            }
+            
+            for (size_t i = 0; i < 10; i++) {
+                if (offers[i].state !=2) { continue; }
+                offers[i].eta = offers[i].eta-1;
+                if (offers[i].eta <=0) { offers[i].state = 0; }
+                if (offers[i].state == 2){
+                    printf("%d %s %s %d %d",
+                    offers[i].id,
+                    offers[i].name,
+                    offers[i].resource,
+                    offers[i].quanitity,
+                    offers[i].eta);  
+                }
+            }
+        }
+        if (clock_print == 2) {
+            system("clear");
+            printf("Transaction started.\nType DONE to end the trasaction.\nRemaining time: %d\n", gsETA);
+            gsETA = gsETA -1;
+        }
+    fflush(stdout);
+    }
+}
 
 void recv_(int handle, Message *msg){
     if (recv(handle, msg, sizeof(Message), 0) == -1) {

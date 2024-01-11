@@ -54,7 +54,6 @@ typedef struct user {
     socklen_t len; //Dlugosc adresu uzytkownika
     int handle; //Deskryptor
     int type; // Typ uzytkownika
-    int busy; // Czy jest zajety
     char name[10]; // Nazwa uzytkownika
     int log_timeout; //Czas 
     int tid; //Do jakiego watku nalezy
