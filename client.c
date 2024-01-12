@@ -5,7 +5,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#define SOCKET_NAME "/tmp/DemoSocket"
+#define SOCKET_NAME "/home/cheemsburger/Desktop/TESTF"
 #define BUFFER_SIZE 128
 
 int main(void) {

@@ -5,7 +5,7 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#define SOCKET_NAME "/tmp/DemoSocket"
+#define SOCKET_NAME "/home/cheemsburger/Desktop/TESTF"
 #define BUFFER_SIZE 128
 
 int main(void) {
@@ -42,11 +42,6 @@ int main(void) {
 
     for (;;) {
         data_socket = accept(connection_socket, NULL, NULL);
-        if (data_socket == -1) {
-            perror("accept");
-            exit(EXIT_FAILURE);
-        }
-
         result = 0;
         for (;;) {
             memset(buffer, 0, BUFFER_SIZE);
@@ -55,25 +50,19 @@ int main(void) {
                 perror("read");
                 exit(EXIT_FAILURE);
             }
-
+            sprintf(buffer, "%s",  buffer);
+            // snprintf(buffer, sizeof(buffer), "%d", result);
+            ret = write(data_socket, buffer, strlen(buffer) + 1);
+            if (ret == -1) {
+                perror("write");
+                exit(EXIT_FAILURE);
+            }
             if (!strncmp(buffer, "DONE", strlen("DONE")))
                 break;
-
-            result += atoi(buffer);
+            }
         }
-
-        snprintf(buffer, sizeof(buffer), "Result = %d", result);
-        ret = write(data_socket, buffer, strlen(buffer) + 1);
-        if (ret == -1) {
-            perror("write");
-            exit(EXIT_FAILURE);
-        }
-
-        close(data_socket);
-    }
-
     close(connection_socket);
     unlink(SOCKET_NAME);
-
     return 0;
-}
+
+    }
