@@ -128,6 +128,7 @@ void register_() {
 
 void client_mode() {
     while (1) {
+        system("clear");
         fcntl(handle, F_SETFL, f_block);
         int choice = 0;
         printf("1. Post new offer\n2. Exit\n# ");
@@ -204,6 +205,7 @@ void finalize(int internalETA) {
             system("clear");
             printf("Supplier has completed your order. You may post a new order.\n");
             sleep(3);
+            system("clear");
             return;
         }
         //////////////////////
@@ -211,12 +213,14 @@ void finalize(int internalETA) {
             system("clear");
             printf("No supplier has chosen your order, thus the order has been cancelled.\nYou may post a new order.\n");
             sleep(3);
+            system("clear");
             return;
         }
         if (n > 0 && temp.code == TRASACTION_ABANDON) {
             system("clear");
             printf("No respond from the supplier. Transaction may have been abandoned.\n Post a new order.\n");
             sleep(3);
+            system("clear");
             return;     
         }
         //////////////
@@ -368,7 +372,7 @@ void *clock_(void* arg) {
         if (clock_print == 1) {
             system("clear");
             if (input_state == 0) {
-                printf("1. Post a new bid\n2. Exit\n");    
+                printf("1. Post a new bid\n2. Exit\nID  NAME  RES  AMT  ST_IN\n");    
             } else if (input_state == 1) {
                 printf("FORMAT: {ID} {ETA}\n# ");
             }
@@ -377,8 +381,8 @@ void *clock_(void* arg) {
                 if (offers[i].state !=2) { continue; }
                 offers[i].eta = offers[i].eta-1;
                 if (offers[i].eta <=0) { offers[i].state = 0; }
-                if (offers[i].state == 2){
-                    printf("%d %s %s %d %d",
+                if (offers[i].state == 2 && input_state != 1){
+                    printf("%d %s %s %d %d\n",
                     offers[i].id,
                     offers[i].name,
                     offers[i].resource,
