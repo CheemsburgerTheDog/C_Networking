@@ -128,6 +128,7 @@ void register_() {
 
 void client_mode() {
     while (1) {
+        fcntl(handle, F_SETFL, f_block);
         int choice = 0;
         printf("1. Post new offer\n2. Exit\n# ");
         scanf("%d", &choice);
