@@ -38,7 +38,7 @@ void perror_(const char *);
 
 
 int main (int argc, char* argv[]) {
-    run(argv[1], 7030);
+    run(argv[1], atoi(argv[2]));
 }
 void run(char *ip, int port) {
     int choice = 0;
