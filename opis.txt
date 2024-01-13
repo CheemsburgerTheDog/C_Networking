@@ -1,0 +1,23 @@
+Zalozeniem programu jest poprowadzenie transakcji pomiedzy klientem a dostawca w ktorej w domysle udzial biora pieniadze.
+Z tej racji wybralismy protokol sieciowy TCP. Nasz projekt wymaga aby polaczenie bylo stabilne, pewne,
+ nieobarczone ryzykiem przepadkniia kluczowego dla kontynuacji transackji pakietu.
+WYbierajac architekture chcielismy aby serwer byl wysoce skalowalny dla ogromnej ilosci klientow, z tego i z faktu korzystania z TCP musi byc w stanie
+oblsuzyc duza ilosc polaczen. Zdecydowalismy sie na serwer wspolbiezny oparty na watkach i epoll(). 
+Taka architektura pozwala nam na sprawne wykorzystanie poteznych wielordzeniowych procesorow serwerowych
+ jednoczesnie, przy jednoczesnym radzeniu sobie z duza iloscia polaczen w ramach pojedzycego rdzenia.
+
+Serwer jest w pelni parametryzowalny.
+
+Z racji ze kazde polaczenie niee posiada swojego watku, komunikacja, wszystkie lukcje wlacznie z niestandardowym recv_ i send_ zostaly zaprojektowane z mysla o nieoczekiwaniu na informacje ze strony uzytkownika
+Kazdy kluczowy element serwera taki jak oferta, uzytkownik posiada swoja struktore ktora przechowuje wszysktie naajwazniejsze informacje. Dzieki temu kazda wiadomosc jest niezelazna od ichh 
+poniewaz modyfikuja odpowiednio strukture np. uzytkonika a nastgepny pakiet korzysta z gotowego zmodyfikowanego
+KOmunikacja odbywa sie poprzez pakiet zawierajacy 2 wartosci. Typ komunikatu zwany kodem oraz komunikat zwany wiadomoscia
+Typy komunikatow to globalnie zdefiniowane liczby inspirowane statusami HTTP. Sa one odpdowiednio pogrupowane 
+np. za rejestracje odpowiadaja kody 1X, za operacje na ofertach kody z rodziny 3X.
+
+Do spelnienia zalozenia wykonania operacji w czasie T. Utworzylismy watek clock_ ktory usypia co sekunde i w kazdym cyklu aktualizuje przebyte czasy i nadzoruje je 
+
+
+Ustawienie flag EPOLLIN | EPOLLRDHUP zabezpiecza instacje epoll przed bledami wynikajacymi z niespodziewanego zerwania polaczenia.
+ Otrzymanie wydazenia 8193 informuje nas ze nadchodzaca wiadomosc wynika z zerwanego polaczenia, to polaczenie wymaga zamkniecia i zwolneinia zasobowo.
+ Serwer 
